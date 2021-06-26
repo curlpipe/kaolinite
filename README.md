@@ -18,7 +18,7 @@
 ## Key Features
 
 - Well documented API - Examples and explainations are provided
-- Unicode safe, supports double width characters on the terminal
+- Unicode safe - supports double width characters on the terminal
 - Handles scrolling and cursor - No more janky cursor incrementing code
 - Dynamically handles formatting of files - Determines style on read, keeps that style on write
 	+ Unix and DOS line endings
