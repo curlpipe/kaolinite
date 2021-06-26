@@ -1,0 +1,15 @@
+[package]
+name = "kaolinite"
+version = "0.1.0"
+edition = "2018"
+license = "MIT"
+description = "A crate to assist in the creation of TUI text editors."
+repository = "https://github.com/curlpipe/kaolinite"
+readme = "README.md"
+keywords = ["unicode", "text-processing"]
+categories = ["text-processing"]
+
+[dependencies]
+lazy-regex = "2.2.1"
+thiserror = "1.0.25"
+unicode-width = "0.1.8"

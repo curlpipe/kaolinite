@@ -1,0 +1,8 @@
+use lazy_regex::{Lazy, Regex, lazy_regex};
+use unicode_width::UnicodeWidthStr;
+
+pub static LINE_ENDING_SPLITTER: Lazy<Regex> = lazy_regex!("(\\r\\n|\\n)");
+
+pub fn width<S: Into<String>>(text: S) -> usize {
+    UnicodeWidthStr::width(text.into())
+}

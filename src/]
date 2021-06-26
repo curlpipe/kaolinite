@@ -1,0 +1,50 @@
+use crate::event::{Result, Status};
+use crate::utils::width;
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Row {
+    pub text: Vec<char>,  // Characters
+    pub widths: Vec<u16>, // Character widths (unicode)
+    pub status: Status,   // Status of the row
+}
+
+impl Row {
+    /// Create a new row from raw text
+    pub fn new<S: Into<String>>(text: S) -> Self {
+        let text = text.into();
+        Self {
+            text: text.chars().collect(),
+            widths: Row::raw_to_widths(&text),
+            status: Status::None,
+        }
+    }
+
+    /// Insert text at a position
+    pub fn insert<S: Into<String>>(&mut self, start: usize, text: S) -> Result<()> {
+        let text = text.into();
+        self.text.splice(start..start, text.chars());
+        self.widths.splice(start..start, Row::raw_to_widths(&text));
+        self.status = Status::None;
+        Ok(())
+    }
+
+    /// Remove text in a range
+    pub fn remove(&mut self, range: std::ops::Range<usize>) -> Result<()> {
+        let (start, end) = (range.start, range.end);
+        self.text.splice(start..end, []);
+        self.widths.splice(start..end, []);
+        self.status = Status::None;
+    }
+
+    /// Render the row
+    pub fn render(&self, range: std::ops::RangeFrom<usize>) -> String {
+        let mut result = String::new();
+        self.text.iter().for_each(|c| result.push(*c));
+        result
+    }
+
+    /// Find the widths of the characters in raw text
+    fn raw_to_widths(text: &str) -> Vec<u16> {
+        text.chars().map(|c| width(c) as u16).collect()
+    }
+}
