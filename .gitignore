@@ -1,3 +1,7 @@
 /target
 /*.html
 /Cargo.lock
+/*.swp
+/src/*.swp
+/tests/*.swp
+/examples/*.swp
