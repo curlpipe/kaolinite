@@ -1,9 +1,14 @@
 use lazy_regex::{Lazy, Regex, lazy_regex};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use std::collections::HashMap;
+use unicode_width::UnicodeWidthChar;
+use crate::row::Row;
+
+/// Whitespace character array
+const WHITESPACE: [char; 2] = [' ', '\t'];
 
 /// Regex that matches all line delimeters, used for splitting lines
 pub static LINE_ENDING_SPLITTER: Lazy<Regex> = lazy_regex!("(\\r\\n|\\n)");
+pub static TAB_DETECTION: Lazy<Regex> = lazy_regex!("(?ms)(^\\t)");
 
 /// String helper macro
 #[macro_export] macro_rules! st {
@@ -31,26 +36,6 @@ impl Into<Size> for (usize, usize) {
     }
 }
 
-trait Width {
-    fn width(&self) -> usize;
-}
-
-impl Width for String {
-    /// Work out the width that will be displayed on the terminal
-    #[cfg(not(tarpaulin_include))]
-    fn width(&self) -> usize {
-        UnicodeWidthStr::width(self.as_str())
-    }
-}
-
-impl Width for char {
-    /// Work out the width that will be displayed on the terminal
-    #[cfg(not(tarpaulin_include))]
-    fn width(&self) -> usize {
-        UnicodeWidthChar::width(*self).unwrap_or(0)
-    }
-}
-
 /// Generate a look up table between the raw and display indices
 pub fn raw_indices(s: &str, i: &[usize]) -> HashMap<usize, usize> {
     let mut raw = 0;
@@ -61,4 +46,48 @@ pub fn raw_indices(s: &str, i: &[usize]) -> HashMap<usize, usize> {
         indices.insert(i[c + 1], raw);
     }
     indices
+}
+
+/// Retrieve the indices of word boundaries
+pub fn words(row: &Row) -> Vec<usize> {
+    // Gather information and set up algorithm
+    let tabs = row.get_tab_width();
+    let mut result = vec![];
+    let mut dis = 0;
+    let mut chr = 0;
+    let mut pad = true;
+    // While still inside the row
+    while chr < row.text.len() {
+        match row.text[chr] {
+            // Move forward through all the spaces
+            ' ' => dis += 1,
+            '\t' => { 
+                // If we haven't encountered text yet
+                if pad { 
+                    // Make this a word boundary
+                    result.push(dis); 
+                } 
+                // Move forward
+                dis += tabs; 
+            }
+            _ => {
+                // Set the marker to false, as we're encountering text
+                pad = false;
+                // Set this as a word boundary
+                result.push(dis);
+                // Skip through text, end when we find whitespace or the end of the row
+                while chr < row.text.len() && !WHITESPACE.contains(&row.text[chr]) {
+                    dis += row.text[chr].width().unwrap_or(0);
+                    chr += 1;
+                }
+                // Deal with next lot of whitespace or exit if at the end of the row
+                continue;
+            }
+        }
+        // Advance and continue
+        chr += 1;
+    }
+    // Add on the last point on the row as a word boundary
+    result.push(row.width());
+    result
 }

@@ -36,6 +36,13 @@ fn test_line_splitter() {
 }
 
 #[test]
+fn test_tab_detection() {
+    assert!(TAB_DETECTION.find("hello\n\tthere\n").is_some());
+    assert!(TAB_DETECTION.find("he\tllo\n    there\n").is_none());
+    assert!(TAB_DETECTION.find("\thello\n\tthere").is_some());
+}
+
+#[test]
 fn test_row() {
     let mut row = Row::new("aa好b好c");
     assert_eq!(row.text, vec!['a', 'a', '好', 'b', '好', 'c']);
@@ -49,7 +56,11 @@ fn test_row() {
     assert_eq!(row.render(6..), " c");
     assert_eq!(row.render(7..), "c");
     let row = Row::new("The quick brown fox jumped over the lazy dog!");
-    assert_eq!(row.words(), vec![0, 4, 10, 16, 20, 27, 32, 36, 41]);
+    assert_eq!(row.words(), vec![0, 4, 10, 16, 20, 27, 32, 36, 41, 45]);
+    let row = Row::new("\tHello");
+    assert_eq!(row.words(), vec![0, 4, 9]);
+    let row = Row::new("\t\tHel\tlo");
+    assert_eq!(row.words(), vec![0, 4, 8, 15, 17]);
     let row = Row::new("呢逆反驳船r舱s");
     assert_eq!(row.get_char_ptr(0), 0);
     assert_eq!(row.get_char_ptr(2), 1);
@@ -78,28 +89,30 @@ fn test_row() {
 
 #[test]
 fn test_document() {
-    let doc = Document::open("examples/test.txt", (10, 10)).expect("File not found");
-    assert_eq!(doc.rows, vec![Row { text: vec![], indices: vec![0], modified: false }]);
-    let mut doc = Document::open("examples/test2.txt", (10, 10)).expect("File not found");
+    assert_eq!(FileInfo::default(), FileInfo { file: None, is_dos: false, tab_width: 4 });
+    let mut doc = Document::new((10, 10));
+    doc.open("examples/test.txt").expect("File not found");
+    assert_eq!(doc.rows, vec![Row { text: vec![], indices: vec![0], modified: false, info: &mut doc.info }]);
+    doc.open("examples/test2.txt").expect("File not found");
     assert_eq!(doc.rows, vec![
-        Row::new("My"), 
-        Row::new("new好"), 
-        Row::new("document"), 
-        Row::new("好"),
-        Row::new(""),
+        Row::new("My").link(&mut doc.info), 
+        Row::new("new好").link(&mut doc.info), 
+        Row::new("document").link(&mut doc.info), 
+        Row::new("好").link(&mut doc.info),
+        Row::new("").link(&mut doc.info),
     ]);
     doc.row_mut(0).unwrap().insert(1, ",").unwrap();
     doc.row_mut(0).unwrap().remove(2..3).unwrap();
     assert_eq!(doc.rows, vec![
-        Row { text: vec!['M', ','], indices: vec![0, 1, 2], modified: true },
-        Row::new("new好"), 
-        Row::new("document"), 
-        Row::new("好"),
-        Row::new(""),
+        Row { text: vec!['M', ','], indices: vec![0, 1, 2], modified: true, info: &mut doc.info },
+        Row::new("new好").link(&mut doc.info),
+        Row::new("document").link(&mut doc.info),
+        Row::new("好").link(&mut doc.info),
+        Row::new("").link(&mut doc.info),
     ]);
-    assert_eq!(doc.row(1).unwrap(), &Row::new("new好"));
+    assert_eq!(doc.row(1).unwrap().clone(), Row::new("new好").link(&mut doc.info));
     doc.cursor.y = 1;
-    assert_eq!(doc.current_row().unwrap(), &Row::new("new好"));
+    assert_eq!(doc.current_row().unwrap().clone(), Row::new("new好").link(&mut doc.info));
     assert_eq!(doc.current_row().unwrap().len(), 4);
     assert_eq!(doc.current_row().unwrap().width(), 5);
     assert_eq!(doc.render(), "M,\nnew好\ndocument\n好\n");
@@ -107,7 +120,8 @@ fn test_document() {
 
 #[test]
 fn test_movement() {
-    let mut doc = Document::open("examples/test3.txt", (10, 3)).expect("File not found");
+    let mut doc = Document::new((10, 3));
+    doc.open("examples/test3.txt").expect("File not found");
     doc.cursor.y = 2;
     // Move left
     doc.cursor.x = 2;
@@ -196,7 +210,8 @@ fn test_movement() {
 
 #[test]
 fn test_unicode_safe_movement() {
-    let mut doc = Document::open("examples/test3.txt", (10, 3)).expect("File not found");
+    let mut doc = Document::new((10, 3));
+    doc.open("examples/test3.txt").expect("File not found");
     // Ensure graphemes are correctly traversed left
     doc.cursor.x = 8;
     doc.offset.x = 3;
@@ -254,7 +269,7 @@ fn test_unicode_safe_movement() {
     assert_eq!(doc.offset.x, 5);
     assert_eq!(doc.char_ptr, 8);
     // When moving down, ensure the char ptr updates correctly
-    let mut doc = Document::open("./examples/test4.txt", (10, 3)).expect("File not found");
+    doc.open("examples/test4.txt").expect("File not found");
     doc.cursor.x = 8;
     doc.char_ptr = 5;
     assert_eq!(doc.move_down().unwrap(), Status::None);
@@ -281,7 +296,8 @@ fn test_unicode_safe_movement() {
 
 #[test]
 fn test_line_snapping() {
-    let mut doc = Document::open("examples/test2.txt", (10, 10)).expect("File not found");
+    let mut doc = Document::new((10, 10));
+    doc.open("examples/test2.txt").expect("File not found");
     doc.cursor.y = 2;
     doc.cursor.x = 5;
     doc.char_ptr = 5;
@@ -300,18 +316,21 @@ fn test_line_snapping() {
 
 #[test]
 fn test_save() {
-    let mut doc = Document::open("examples/test5.txt", (10, 3)).expect("File not found");
+    let mut doc = Document::new((10, 3));
+    doc.open("examples/test5.txt").expect("File not found");
     // Save
     assert_eq!(doc.rows, vec![Row { 
         text: vec!['h', 'e', 'l', 'l', 'o'], 
         indices: vec![0, 1, 2, 3, 4, 5], 
-        modified: false 
+        modified: false,
+        info: &mut doc.info,
     }]);
     doc.row_mut(0).unwrap().remove(0..3).unwrap();
     assert_eq!(doc.rows, vec![Row { 
         text: vec!['l', 'o'], 
         indices: vec![0, 1, 2], 
-        modified: true
+        modified: true,
+        info: &mut doc.info,
     }]);
     assert!(doc.save().is_ok());
     assert_eq!(std::fs::read_to_string(doc.info.file.as_ref().unwrap()).unwrap(), "lo");
@@ -324,4 +343,15 @@ fn test_save() {
     assert_eq!(std::fs::read_to_string("examples/temp.txt").unwrap(), st!("hello"));
     std::fs::remove_file("examples/temp.txt").unwrap();
     assert!(!std::path::Path::new("examples/temp.txt").exists());
+}
+
+#[test]
+fn test_tab() {
+    let mut doc = Document::new((10, 3));
+    doc.info.tab_width = 2;
+    doc.open("examples/test6.txt").expect("File not found");
+    println!("{}", doc.info.tab_width);
+    assert_eq!(doc.render(), st!("  hello\n    hello"));
+    println!("{}", doc.info.tab_width);
+    assert_eq!(doc.row(0).unwrap().indices, vec![0, 2, 3, 4, 5, 6, 7]);
 }

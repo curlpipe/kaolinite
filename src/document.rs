@@ -5,14 +5,26 @@ use crate::row::Row;
 use std::fs;
 
 /// A struct that stores information about a file
-#[derive(Debug, Default)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FileInfo {
     /// The file name of the document
     pub file: Option<String>,
     /// True if \r\n is used, false if \n is used
     pub is_dos: bool,
-    // True if the file uses tabs instead of spaces
-    // pub is_tab: bool,
+    /// Tab width of the file in spaces (default is 4, you can overwrite if need be)
+    /// There is a slight quirk, however. You must edit this field *directly after*
+    /// defining a Document, otherwise, the configuration may not apply.
+    pub tab_width: usize,
+}
+
+impl Default for FileInfo {
+    fn default() -> Self {
+        Self {
+            file: None,
+            is_dos: false,
+            tab_width: 4,
+        }
+    }
 }
 
 /// A struct that contains all the basic tools necessary to manage documents
@@ -33,22 +45,38 @@ pub struct Document {
 }
 
 impl Document {
-    /// Open a file at a specified path into a new document
+    /// Create a new document
     #[cfg(not(tarpaulin_include))]
-    pub fn open<P: Into<String>, S: Into<Size>>(path: P, size: S) -> Result<Self> {
-        let path = path.into();
-        let raw = fs::read_to_string(&path)?;
-        Ok(Self {
-            info: FileInfo{
-                file: Some(path),
-                is_dos: raw.contains("\\r\\n"),
-            },
-            rows: Document::raw_to_rows(&raw),
+    pub fn new<S: Into<Size>>(size: S) -> Self {
+        Self {
+            info: FileInfo::default(),
+            rows: vec![],
             cursor: Loc::default(),
             offset: Loc::default(),
             size: size.into(),
             char_ptr: 0,
-        })
+        }
+    }
+    /// Open a file at a specified path into this document
+    /// This will also reset the cursor position, offset position, 
+    /// file name, contents and line ending information
+    #[cfg(not(tarpaulin_include))]
+    pub fn open<P: Into<String>>(&mut self, path: P) -> Result<()> {
+        // Read in information
+        let path = path.into();
+        let raw = fs::read_to_string(&path)?;
+        // Reset to default values
+        self.info = FileInfo {
+            file: Some(path),
+            is_dos: raw.contains("\\r\\n"),
+            tab_width: self.info.tab_width,
+        };
+        self.cursor = Loc::default();
+        self.offset = Loc::default();
+        self.char_ptr = 0;
+        // Load in the rows
+        self.rows = self.raw_to_rows(&raw);
+        Ok(())
     }
 
     /// Save a file
@@ -202,8 +230,8 @@ impl Document {
     }
 
     /// Take raw text and convert it into Row structs
-    fn raw_to_rows(text: &str) -> Vec<Row> {
+    fn raw_to_rows(&mut self, text: &str) -> Vec<Row> {
         let rows: Vec<&str> = LINE_ENDING_SPLITTER.split(text).collect();
-        rows.iter().map(|s| Row::new(*s)).collect()
+        rows.iter().map(|s| Row::new(*s).link(&mut self.info)).collect()
     }
 }

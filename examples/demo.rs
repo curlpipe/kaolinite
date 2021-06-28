@@ -4,7 +4,8 @@ use unicode_width::UnicodeWidthStr;
 
 fn main() -> Result<()> {
     // Open a file into document
-    let mut document = Document::open("./examples/test.txt", (10, 10))?;
+    let mut document = Document::new((10, 10));
+    document.open("examples/test.txt")?;
     // Obtain a mutable reference to the first row in the document
     let first = document.row_mut(0)?;
     // Apply some operations
