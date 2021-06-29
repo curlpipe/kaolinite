@@ -56,9 +56,9 @@ Don't hesitate to contact me (see bottom of readme) if you require assistance.
 This software uses the following open source crates:
 
 - [unicode-width](https://github.com/unicode-rs/unicode-width)
-- [lazy-regex](https://github.com/canop/lazy-regex)
-- [thiserror](https://github.com/dtolnay/thiserror)
-- [synoptic](https://github.com/curlpipe/synoptic)
+- [once_cell](https://github.com/matklad/once_cell)
+- [regex](https://github.com/rust-lang/regex)
+<!-- - [synoptic](https://github.com/curlpipe/synoptic) -->
 
 ## License
 
