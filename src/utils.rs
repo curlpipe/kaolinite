@@ -8,7 +8,6 @@ const WHITESPACE: [char; 2] = [' ', '\t'];
 
 /// Regex that matches all line delimeters, used for splitting lines
 pub static LINE_ENDING_SPLITTER: Lazy<Regex> = lazy_regex!("(\\r\\n|\\n)");
-pub static TAB_DETECTION: Lazy<Regex> = lazy_regex!("(?ms)(^\\t)");
 
 /// String helper macro
 #[macro_export]
@@ -32,7 +31,7 @@ impl Into<Loc> for (usize, usize) {
     }
 }
 
-/// A struct that holds positions
+/// A struct that holds size
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Size {
     pub w: usize,

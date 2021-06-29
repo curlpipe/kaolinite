@@ -1,4 +1,7 @@
-// event.rs - Contains enums that represent the status of the editor and events
+//! event: Enums that represent the status of the editor and events
+//!
+//! This contains the Error types, as well as the possible events you can use
+
 use crate::utils::Loc;
 use thiserror::Error;
 
@@ -9,31 +12,39 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Event {
     /// Insert a character at a position.
+    /// Takes a location and a character to insert
     Insert(Loc, char),
-    /// Remove a character at a position
+    /// Remove a character at a position.
+    /// Takes a location and the character that has been removed.
     Remove(Loc, char),
-    /// Insert a line
-    InsertLine(usize, String),
-    /// Remove a line
-    RemoveLine(usize, String),
-    /// Cut a line in half and drop the last half down a line
+    /// Insert a row.
+    /// Takes a row index and a string for the row.
+    InsertRow(usize, String),
+    /// Remove a row.
+    /// Takes a row index and a string for the row.
+    RemoveRow(usize, String),
+    /// Cut a line in half and drop the last half down a line.
+    /// This is for times when the enter key is pressed in the middle of a line.
     SplitDown(Loc),
-    /// Splice a line with the line above
+    /// Splice a line with the line above.
+    /// This is for times when the backspace key is pressed at the start of a line.
     SpliceUp(Loc),
 }
 
 /// Status contains the states the document can be in after an event execution
 #[derive(Debug, PartialEq)]
 pub enum Status {
-    /// Cursor reaches the end of a row
+    /// Cursor reaches the end of a row.
+    /// Useful for if you want to wrap the cursor around when it hits the end of the row.
     EndOfRow,
-    /// Cursor reaches the start of a row
+    /// Cursor reaches the start of a row.
+    /// Useful for if you want to wrap the cursor around when it hits the start of the row.
     StartOfRow,
-    /// Cursor reaches the start of the document
+    /// Cursor reaches the start of the document.
     EndOfDocument,
-    /// Cursor reaches the start of the document
+    /// Cursor reaches the start of the document.
     StartOfDocument,
-    /// Nothing of note
+    /// Nothing of note.
     None,
 }
 

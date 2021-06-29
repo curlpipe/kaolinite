@@ -1,3 +1,9 @@
+//! row: Tools for inserting and removing characters
+//!
+//! This contains the [Row] struct. Occasionally, you might
+//! require some row-specific information such as how it looks when rendered,
+//! or where the word boundaries in it are.
+
 use crate::document::FileInfo;
 use crate::event::{Error, Result, Status};
 use crate::st;
@@ -53,6 +59,8 @@ impl Row {
     }
 
     /// Insert text at a position
+    /// # Errors
+    /// Will return `Err` if `start` is out of range of the row
     pub fn insert<S: Into<String>>(&mut self, start: usize, text: S) -> Result<Status> {
         if start > self.width() {
             return Err(Error::OutOfRange);
@@ -67,6 +75,8 @@ impl Row {
     }
 
     /// Remove text in a range
+    /// # Errors
+    /// Will return `Err` if `range` is out of range of the row
     pub fn remove(&mut self, range: std::ops::Range<usize>) -> Result<Status> {
         let (start, end) = (range.start, range.end);
         if start > self.width() {
@@ -81,11 +91,19 @@ impl Row {
     }
 
     /// Splits this row into two separate rows
+    /// # Errors
+    /// Will return `Err` if `idx` is out of range of the row
     pub fn split(&self, idx: usize) -> Result<(Row, Row)> {
-        let left = self.text[..idx]
+        let left = self
+            .text
+            .get(..idx)
+            .ok_or(Error::OutOfRange)?
             .iter()
             .fold(st!(""), |a, x| format!("{}{}", a, x));
-        let right = self.text[idx..]
+        let right = self
+            .text
+            .get(idx..)
+            .ok_or(Error::OutOfRange)?
             .iter()
             .fold(st!(""), |a, x| format!("{}{}", a, x));
         let mut left = Row::new(left).link(self.info);
@@ -95,19 +113,28 @@ impl Row {
     }
 
     /// Joins this row with another row
-    pub fn splice(&mut self, mut row: Row) -> Result<Row> {
+    pub fn splice(&mut self, mut row: Row) -> Row {
         let mut text = self.text.clone();
         text.append(&mut row.text);
         let indices = Row::raw_to_indices(&text, self.get_tab_width());
-        Ok(Row {
+        Row {
             indices,
             text,
             modified: true,
             info: self.info,
-        })
+        }
     }
 
     /// Retrieve the indices of word boundaries
+    /// ```
+    /// // Opening a file,
+    /// use kaolinite::document::Document;
+    /// let mut doc = Document::new();
+    /// // Imagine if test.txt were `The quick brown fox`
+    /// doc.open("test.txt").expect("Failed to open file");
+    /// // This would get the word boundaries of the first row: [0, 4, 10, 16, 19]
+    /// println!("{:?}", doc.row(0).words());
+    /// ```
     pub fn words(&self) -> Vec<usize> {
         crate::utils::words(self)
     }
@@ -146,7 +173,7 @@ impl Row {
         format!("{}{}", if space { " " } else { "" }, &text[ind[&start]..])
     }
 
-    /// Render the entire row
+    /// Render the entire row, with tabs converted into spaces
     pub fn render_full(&self) -> String {
         // Retrieve tab width
         let tabs = self.get_tab_width();
@@ -161,6 +188,11 @@ impl Row {
                 }
             )
         })
+    }
+
+    /// Render this row as is, with no tab interference
+    pub fn render_raw(&self) -> String {
+        self.text.iter().fold(st!(""), |a, x| format!("{}{}", a, x))
     }
 
     /// Find the character length of this row

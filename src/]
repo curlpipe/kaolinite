@@ -61,7 +61,7 @@ impl Document {
     /// Create a new document
     ///
     /// The argument `size` takes in a [Size](crate::utils::Size) struct. This should
-    /// store information about the terminal size.
+    /// store information about the terminal size. 
     ///
     /// If you plan to implement things
     /// like status lines or tabs, you should subtract them from the size height, as this
@@ -83,8 +83,9 @@ impl Document {
     ///
     /// This will also reset the cursor position, offset position,
     /// file name, contents and line ending information
+    ///
     /// # Errors
-    /// Will return `Err` if `path` does not exist or the user does not have
+    /// Will return `Err` if `path` does not exist or the user does not have 
     /// permission to read from it.
     #[cfg(not(tarpaulin_include))]
     pub fn open<P: Into<String>>(&mut self, path: P) -> Result<()> {
@@ -122,7 +123,7 @@ impl Document {
 
     /// Save a file to a specified path
     ///
-    /// Similar to [save](Document::save) but takes a file argument, and saves it there.
+    /// Similar to [save](Document::save) but takes a file argument, and saves it there. 
     /// This method also doesn't change `modified`.
     /// # Errors
     /// Will return `Err` if the provided file path wasn't able to be written to,
@@ -136,12 +137,13 @@ impl Document {
     /// Execute an event in this document
     ///
     /// This method is the main method that should be used to modify the document.
-    /// It takes in an [Event](crate::event::Event) enum.
+    /// It takes in an [Event](crate::event::Event) enum. 
     ///
     /// This method also takes advantage of undo & redo functionality and
-    /// the document modificatior indicator and moves your cursor automatically.
-    /// If you change the rows in the document directly, you will not gain access
+    /// the document modificatior indicator and moves your cursor automatically. 
+    /// If you change the rows in the document directly, you will not gain access 
     /// to these benefits, but you can always manually handle these features if need be.
+    ///
     /// # Errors
     /// Will return `Err` if the event tried to modifiy data outside the scope of the
     /// document.
@@ -159,13 +161,13 @@ impl Document {
                 self.modified = true;
                 self.move_left()
             }
-            Event::InsertRow(loc, st) => {
+            Event::InsertLine(loc, st) => {
                 self.rows.insert(loc, Row::new(st).link(&mut self.info));
                 self.modified = true;
                 self.goto_y(loc)?;
                 Ok(Status::None)
             }
-            Event::RemoveRow(loc, _) => {
+            Event::RemoveLine(loc, _) => {
                 self.goto_y(loc - if loc == 0 { 0 } else { 1 })?;
                 self.rows.remove(loc);
                 self.modified = true;
@@ -174,7 +176,7 @@ impl Document {
             Event::SpliceUp(loc) => {
                 let mut upper = self.row(loc.y)?.clone();
                 let lower = self.row(loc.y + 1)?.clone();
-                self.rows[loc.y] = upper.splice(lower);
+                self.rows[loc.y] = upper.splice(lower)?;
                 self.modified = true;
                 self.rows.remove(loc.y + 1);
                 self.goto(loc)?;
@@ -236,8 +238,6 @@ impl Document {
     }
 
     /// Move the cursor to a specific y coordinate
-    /// # Errors
-    /// Will return `Err` if the location provided is out of scope of the document.
     pub fn goto_y(&mut self, y: usize) -> Result<()> {
         // Bounds checking
         if self.loc().y == y {
@@ -266,8 +266,6 @@ impl Document {
     }
 
     /// Move the cursor to the left
-    /// # Errors
-    /// Will return `Err` if the cursor is out of scope of the document
     pub fn move_left(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far left as possible
         if self.char_ptr == 0 {
@@ -287,8 +285,6 @@ impl Document {
     }
 
     /// Move the cursor to the right
-    /// # Errors
-    /// Will return `Err` if the cursor is out of scope of the document
     pub fn move_right(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far right as possible
         if self.char_ptr == self.current_row()?.len() {
@@ -308,8 +304,6 @@ impl Document {
     }
 
     /// Move the cursor upwards
-    /// # Errors
-    /// Will return `Err` if the cursor is out of scope of the document
     pub fn move_up(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far up as possible
         if self.loc().y == 0 {
@@ -329,8 +323,6 @@ impl Document {
     }
 
     /// Move the cursor downwards
-    /// # Errors
-    /// Will return `Err` if the cursor is out of scope of the document
     pub fn move_down(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far up as possible
         if self.loc().y == self.rows.len() - 1 {
@@ -354,7 +346,7 @@ impl Document {
         let line_ending = if self.info.is_dos { "\r\n" } else { "\n" };
         self.rows
             .iter()
-            .map(|x| x.render_raw())
+            .map(|x| x.render_full())
             .collect::<Vec<_>>()
             .join(line_ending)
     }
@@ -391,22 +383,16 @@ impl Document {
     }
 
     /// Return a reference to a row in the document
-    /// # Errors
-    /// This will error if the index is out of range
     pub fn row(&self, index: usize) -> Result<&Row> {
         Ok(self.rows.get(index).ok_or(Error::OutOfRange)?)
     }
 
     /// Return a mutable reference to a row in the document
-    /// # Errors
-    /// This will error if the index is out of range
     pub fn row_mut(&mut self, index: usize) -> Result<&mut Row> {
         Ok(self.rows.get_mut(index).ok_or(Error::OutOfRange)?)
     }
 
     /// Get the current row
-    /// # Errors
-    /// This will error if the cursor position isn't on a existing row
     pub fn current_row(&self) -> Result<&Row> {
         Ok(self.row(self.loc().y)?)
     }

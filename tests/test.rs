@@ -36,13 +36,6 @@ fn test_line_splitter() {
 }
 
 #[test]
-fn test_tab_detection() {
-    assert!(TAB_DETECTION.find("hello\n\tthere\n").is_some());
-    assert!(TAB_DETECTION.find("he\tllo\n    there\n").is_none());
-    assert!(TAB_DETECTION.find("\thello\n\tthere").is_some());
-}
-
-#[test]
 fn test_row() {
     // Loading
     let mut row = Row::new("aa好b好c");
@@ -62,6 +55,9 @@ fn test_row() {
     assert_eq!(row.render(6..), " c");
     assert_eq!(row.render(7..), "c");
     assert_eq!(row.render(100..), "");
+    let mut row = Row::new("aa好\tb好c");
+    assert_eq!(row.render_full(), "aa好    b好c");
+    assert_eq!(row.render_raw(), "aa好\tb好c");
     // Words
     let row = Row::new("The quick brown fox jumped over the lazy dog!");
     assert_eq!(row.words(), vec![0, 4, 10, 16, 20, 27, 32, 36, 41, 45]);
@@ -119,17 +115,17 @@ fn test_row() {
     let right = Row::new("肚子rsf萨t订");
     let mut dummy = Row::new("sr饿t肚子rsf萨t订");
     dummy.modified = true;
-    assert_eq!(left.splice(right).unwrap(), dummy);
+    assert_eq!(left.splice(right), dummy);
     let mut left = Row::new("");
     let right = Row::new("sr饿t肚子rsf萨t订");
     let mut dummy = Row::new("sr饿t肚子rsf萨t订");
     dummy.modified = true;
-    assert_eq!(left.splice(right).unwrap(), dummy);
+    assert_eq!(left.splice(right), dummy);
     let mut left = Row::new("sr饿t肚子rsf萨t订");
     let right = Row::new("");
     let mut dummy = Row::new("sr饿t肚子rsf萨t订");
     dummy.modified = true;
-    assert_eq!(left.splice(right).unwrap(), dummy);
+    assert_eq!(left.splice(right), dummy);
 }
 
 #[test]
@@ -504,7 +500,7 @@ fn test_tab() {
     doc.info.tab_width = 2;
     doc.open("examples/test6.txt").expect("File not found");
     println!("{}", doc.info.tab_width);
-    assert_eq!(doc.render(), st!("  hello\n    hello"));
+    assert_eq!(doc.render(), st!("\thello\n    hello"));
     println!("{}", doc.info.tab_width);
     assert_eq!(doc.row(0).unwrap().indices, vec![0, 2, 3, 4, 5, 6, 7]);
 }
@@ -515,11 +511,11 @@ fn test_execution() {
     assert_eq!(loc, Loc { x: 2, y: 4 });
     let mut doc = Document::new((10, 3));
     assert_eq!(
-        doc.execute(Event::InsertLine(0, st!(""))).unwrap(),
+        doc.execute(Event::InsertRow(0, st!(""))).unwrap(),
         Status::None
     );
     assert_eq!(
-        doc.execute(Event::InsertLine(1, st!(""))).unwrap(),
+        doc.execute(Event::InsertRow(1, st!(""))).unwrap(),
         Status::None
     );
     assert_eq!(doc.render(), st!("\n"));
@@ -568,7 +564,7 @@ fn test_execution() {
     assert_eq!(doc.loc(), Loc { x: 0, y: 1 });
     doc.goto((0, 0)).unwrap();
     assert_eq!(
-        doc.execute(Event::RemoveLine(1, st!(":!"))).unwrap(),
+        doc.execute(Event::RemoveRow(1, st!(":!"))).unwrap(),
         Status::None
     );
     assert_eq!(doc.render(), st!("qx"));
