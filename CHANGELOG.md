@@ -10,6 +10,9 @@ This project uses semantic versioning.
 \-
 -->
 
+## [0.1.3] - 30/06/2021
+\~ Huge optimisation (~3x faster)
+
 ## [0.1.2] - 29/06/2021
 \+ Added benchmark
 
