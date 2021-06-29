@@ -3,7 +3,6 @@
 //! This contains the Error types, as well as the possible events you can use
 
 use crate::utils::Loc;
-use thiserror::Error;
 
 /// Neater error type
 pub type Result<T> = std::result::Result<T, Error>;
@@ -49,15 +48,28 @@ pub enum Status {
 }
 
 /// Error represents the potential failures in function calls when using this API
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum Error {
     /// Returned when you provide an index that is out of range
-    #[error("Out of range")]
     OutOfRange,
     /// When the program is unable to open a file e.g. doesn't exist or file permissions
-    #[error("File not found")]
-    FileError(#[from] std::io::Error),
+    FileError(std::io::Error),
     /// Saving an unnamed file
-    #[error("No file name for this document")]
     NoFileName,
+}
+
+impl std::fmt::Display for Error {
+    #[cfg(not(tarpaulin_include))]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<std::io::Error> for Error {
+    #[cfg(not(tarpaulin_include))]
+    fn from(e: std::io::Error) -> Error {
+        Error::FileError(e)
+    }
 }

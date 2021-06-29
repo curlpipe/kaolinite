@@ -1,5 +1,5 @@
 #[cfg(test)]
-use kaolinite::{document::*, event::*, row::*, st, utils::*};
+use kaolinite::{document::*, event::*, regex, row::*, st, utils::*};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[test]
@@ -15,22 +15,17 @@ fn test_width() {
 
 #[test]
 fn test_line_splitter() {
+    let l = regex!("(\\r\\n|\\n)");
     assert_eq!(
-        LINE_ENDING_SPLITTER
-            .split("hello\nthere\n")
-            .collect::<Vec<_>>(),
+        l.split("hello\nthere\n").collect::<Vec<_>>(),
         vec![st!("hello"), st!("there"), st!("")],
     );
     assert_eq!(
-        LINE_ENDING_SPLITTER
-            .split("hello\r\nthere\r\n")
-            .collect::<Vec<_>>(),
+        l.split("hello\r\nthere\r\n").collect::<Vec<_>>(),
         vec![st!("hello"), st!("there"), st!("")],
     );
     assert_eq!(
-        LINE_ENDING_SPLITTER
-            .split("hello\r\nthere\na好a")
-            .collect::<Vec<_>>(),
+        l.split("hello\r\nthere\na好a").collect::<Vec<_>>(),
         vec![st!("hello"), st!("there"), st!("a好a")],
     );
 }

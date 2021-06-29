@@ -9,8 +9,9 @@
 //! See the structs section below to find out more about each struct
 
 use crate::event::{Error, Event, Result, Status};
+use crate::regex;
 use crate::row::Row;
-use crate::utils::{Loc, Size, LINE_ENDING_SPLITTER};
+use crate::utils::{Loc, Size};
 use std::fs;
 use unicode_width::UnicodeWidthChar;
 
@@ -384,7 +385,7 @@ impl Document {
 
     /// Take raw text and convert it into Row structs
     fn raw_to_rows(&mut self, text: &str) -> Vec<Row> {
-        let rows: Vec<&str> = LINE_ENDING_SPLITTER.split(text).collect();
+        let rows: Vec<&str> = regex!("(\\r\\n|\\n)").split(text).collect();
         rows.iter()
             .map(|s| Row::new(*s).link(&mut self.info))
             .collect()

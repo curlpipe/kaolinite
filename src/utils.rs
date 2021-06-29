@@ -1,13 +1,9 @@
 use crate::row::Row;
-use lazy_regex::{lazy_regex, Lazy, Regex};
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthChar;
 
 /// Whitespace character array
 const WHITESPACE: [char; 2] = [' ', '\t'];
-
-/// Regex that matches all line delimeters, used for splitting lines
-pub static LINE_ENDING_SPLITTER: Lazy<Regex> = lazy_regex!("(\\r\\n|\\n)");
 
 /// String helper macro
 #[macro_export]
@@ -15,6 +11,15 @@ macro_rules! st {
     ($value:expr) => {
         $value.to_string()
     };
+}
+
+/// Lazy regex creation
+#[macro_export]
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
 }
 
 /// A struct that holds positions
