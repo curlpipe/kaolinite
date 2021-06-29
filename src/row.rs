@@ -67,7 +67,6 @@ impl Row {
         }
         let text = text.into();
         self.text.splice(start..start, text.chars());
-        // TODO: Optimise
         let tabs = self.get_tab_width();
         self.indices = Row::raw_to_indices(&self.text, tabs);
         self.modified = true;
@@ -218,7 +217,7 @@ impl Row {
     /// Find the display width of this row
     #[must_use]
     pub fn width(&self) -> usize {
-        self.render_full().width()
+        *self.indices.last().unwrap_or(&0)
     }
 
     /// Calculate the character pointer from a display index
