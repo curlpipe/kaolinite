@@ -1,8 +1,8 @@
-use crate::utils::{Loc, Size, LINE_ENDING_SPLITTER};
-use crate::event::{Result, Error, Status, Event};
-use unicode_width::UnicodeWidthChar;
+use crate::event::{Error, Event, Result, Status};
 use crate::row::Row;
+use crate::utils::{Loc, Size, LINE_ENDING_SPLITTER};
 use std::fs;
+use unicode_width::UnicodeWidthChar;
 
 /// A struct that stores information about a file
 #[derive(Debug, PartialEq, Clone)]
@@ -35,6 +35,8 @@ pub struct Document {
     pub info: FileInfo,
     /// All the rows within the document
     pub rows: Vec<Row>,
+    /// Boolean that changes when the file is edited via the event executor
+    pub modified: bool,
     /// The size holds how much space the document has to render
     pub size: Size,
     /// A pointer to the character at the current cursor position
@@ -52,6 +54,7 @@ impl Document {
         Self {
             info: FileInfo::default(),
             rows: vec![],
+            modified: false,
             cursor: Loc::default(),
             offset: Loc::default(),
             size: size.into(),
@@ -60,7 +63,7 @@ impl Document {
     }
 
     /// Open a file at a specified path into this document.
-    /// This will also reset the cursor position, offset position, 
+    /// This will also reset the cursor position, offset position,
     /// file name, contents and line ending information
     #[cfg(not(tarpaulin_include))]
     pub fn open<P: Into<String>>(&mut self, path: P) -> Result<()> {
@@ -76,16 +79,18 @@ impl Document {
         self.cursor = Loc::default();
         self.offset = Loc::default();
         self.char_ptr = 0;
+        self.modified = false;
         // Load in the rows
         self.rows = self.raw_to_rows(&raw);
         Ok(())
     }
 
     /// Save a file
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&mut self) -> Result<()> {
         let data = self.render();
         let file = self.info.file.as_ref().ok_or(Error::NoFileName)?;
         fs::write(file, data)?;
+        self.modified = false;
         Ok(())
     }
 
@@ -102,27 +107,32 @@ impl Document {
             Event::Insert(loc, ch) => {
                 self.goto(loc)?;
                 self.row_mut(loc.y)?.insert(loc.x, ch)?;
+                self.modified = true;
                 self.move_right()
             }
             Event::Remove(loc, _) => {
                 self.goto(loc)?;
                 self.row_mut(loc.y)?.remove(loc.x..loc.x + 1)?;
+                self.modified = true;
                 self.move_left()
             }
-            Event::InsertLine(loc, st) => { 
+            Event::InsertLine(loc, st) => {
                 self.rows.insert(loc, Row::new(st).link(&mut self.info));
+                self.modified = true;
                 self.goto_y(loc)?;
                 Ok(Status::None)
             }
-            Event::RemoveLine(loc, _) => { 
+            Event::RemoveLine(loc, _) => {
                 self.goto_y(loc - if loc == 0 { 0 } else { 1 })?;
                 self.rows.remove(loc);
+                self.modified = true;
                 Ok(Status::None)
             }
             Event::SpliceUp(loc) => {
                 let mut upper = self.row(loc.y)?.clone();
                 let lower = self.row(loc.y + 1)?.clone();
                 self.rows[loc.y] = upper.splice(lower)?;
+                self.modified = true;
                 self.rows.remove(loc.y + 1);
                 self.goto(loc)?;
                 Ok(Status::None)
@@ -130,6 +140,7 @@ impl Document {
             Event::SplitDown(loc) => {
                 let (left, right) = self.row(loc.y)?.split(loc.x)?;
                 self.rows[loc.y] = left;
+                self.modified = true;
                 self.rows.insert(loc.y + 1, right);
                 self.goto((0, loc.y + 1))?;
                 Ok(Status::None)
@@ -148,10 +159,21 @@ impl Document {
     /// Move the cursor to a specific x coordinate
     /// X is the character index, not the display index
     pub fn goto_x(&mut self, x: usize) -> Result<()> {
-        if self.char_ptr == x || x > self.current_row()?.len() { return Ok(()) }
+        // Bounds checking
+        if self.char_ptr == x {
+            return Ok(());
+        } else if x > self.current_row()?.len() {
+            return Err(Error::OutOfRange);
+        }
+        // Gather and update information
         let viewport = self.offset.x..self.offset.x + self.size.w;
         self.char_ptr = x;
-        let x = *self.current_row()?.indices.get(x).ok_or(Error::OutOfRange)?;
+        let x = *self
+            .current_row()?
+            .indices
+            .get(x)
+            .ok_or(Error::OutOfRange)?;
+        // Start movement
         if x < self.size.w {
             // Cursor is in view when offset is 0
             self.offset.x = 0;
@@ -169,7 +191,12 @@ impl Document {
 
     /// Move the cursor to a specific y coordinate
     pub fn goto_y(&mut self, y: usize) -> Result<()> {
-        if self.loc().y == y { return Ok(()) }
+        // Bounds checking
+        if self.loc().y == y {
+            return Ok(());
+        } else if y > self.rows.len() {
+            return Err(Error::OutOfRange);
+        }
         let viewport = self.offset.y..self.offset.y + self.size.h;
         if y < self.size.h {
             // Cursor is in view when offset is 0
@@ -193,24 +220,28 @@ impl Document {
     /// Move the cursor to the left
     pub fn move_left(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far left as possible
-        if self.char_ptr == 0 { return Ok(Status::StartOfRow) }
+        if self.char_ptr == 0 {
+            return Ok(Status::StartOfRow);
+        }
         // Traverse the grapheme
         for _ in 0..self.get_width(-1)? {
             // Determine whether to change offset or cursor
-            if self.cursor.x == 0 { 
-                self.offset.x -= 1 
-            } else { 
-                self.cursor.x -= 1 
+            if self.cursor.x == 0 {
+                self.offset.x -= 1
+            } else {
+                self.cursor.x -= 1
             }
         }
-        self.char_ptr -= 1; 
+        self.char_ptr -= 1;
         Ok(Status::None)
     }
 
     /// Move the cursor to the right
     pub fn move_right(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far right as possible
-        if self.char_ptr == self.current_row()?.len() { return Ok(Status::EndOfRow) }
+        if self.char_ptr == self.current_row()?.len() {
+            return Ok(Status::EndOfRow);
+        }
         // Traverse the grapheme
         for _ in 0..self.get_width(0)? {
             // Determine whether to change offset or cursor
@@ -228,7 +259,7 @@ impl Document {
     pub fn move_up(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far up as possible
         if self.loc().y == 0 {
-            return Ok(Status::StartOfDocument)
+            return Ok(Status::StartOfDocument);
         }
         // Determine whether to change offset or cursor
         if self.cursor.y == 0 {
@@ -247,8 +278,8 @@ impl Document {
     pub fn move_down(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far up as possible
         if self.loc().y == self.rows.len() - 1 {
-            return Ok(Status::EndOfDocument)
-        } 
+            return Ok(Status::EndOfDocument);
+        }
         // Determine whether to change offset or cursor
         if self.cursor.y == self.size.h - 1 {
             self.offset.y += 1;
@@ -279,17 +310,17 @@ impl Document {
         let start = self.loc().x;
         let mut ptr = self.loc().x;
         // Shift back until on boundary
-        while !row.indices.contains(&ptr) { 
+        while !row.indices.contains(&ptr) {
             ptr -= 1;
         }
         // Work out required adjustment
         let adjustment = start - ptr;
         // Perform adjustment
         for _ in 0..adjustment {
-            if self.cursor.x == 0 { 
-                self.offset.x -= 1 
-            } else { 
-                self.cursor.x -= 1 
+            if self.cursor.x == 0 {
+                self.offset.x -= 1
+            } else {
+                self.cursor.x -= 1
             }
         }
         Ok(())
@@ -298,7 +329,9 @@ impl Document {
     /// Take raw text and convert it into Row structs
     fn raw_to_rows(&mut self, text: &str) -> Vec<Row> {
         let rows: Vec<&str> = LINE_ENDING_SPLITTER.split(text).collect();
-        rows.iter().map(|s| Row::new(*s).link(&mut self.info)).collect()
+        rows.iter()
+            .map(|s| Row::new(*s).link(&mut self.info))
+            .collect()
     }
 
     /// Return a reference to a row in the document

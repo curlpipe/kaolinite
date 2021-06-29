@@ -1,11 +1,5 @@
 #[cfg(test)]
-use kaolinite::{
-    utils::*,
-    row::*,
-    document::*,
-    event::*,
-    st,
-};
+use kaolinite::{document::*, event::*, row::*, st, utils::*};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 #[test]
@@ -22,15 +16,21 @@ fn test_width() {
 #[test]
 fn test_line_splitter() {
     assert_eq!(
-        LINE_ENDING_SPLITTER.split("hello\nthere\n").collect::<Vec<_>>(),
+        LINE_ENDING_SPLITTER
+            .split("hello\nthere\n")
+            .collect::<Vec<_>>(),
         vec![st!("hello"), st!("there"), st!("")],
     );
     assert_eq!(
-        LINE_ENDING_SPLITTER.split("hello\r\nthere\r\n").collect::<Vec<_>>(),
+        LINE_ENDING_SPLITTER
+            .split("hello\r\nthere\r\n")
+            .collect::<Vec<_>>(),
         vec![st!("hello"), st!("there"), st!("")],
     );
     assert_eq!(
-        LINE_ENDING_SPLITTER.split("hello\r\nthere\na好a").collect::<Vec<_>>(),
+        LINE_ENDING_SPLITTER
+            .split("hello\r\nthere\na好a")
+            .collect::<Vec<_>>(),
         vec![st!("hello"), st!("there"), st!("a好a")],
     );
 }
@@ -54,9 +54,14 @@ fn test_row() {
     assert_eq!(row.render_full(), "aani好haob好c");
     row.remove(3..7).unwrap();
     assert_eq!(row.render_full(), "aanob好c");
+    // Bounds checking
+    assert!(row.insert(10000, "nope").is_err());
+    assert!(row.remove(10000..482228).is_err());
+    // Rendering
     assert_eq!(row.render(5..), "好c");
     assert_eq!(row.render(6..), " c");
     assert_eq!(row.render(7..), "c");
+    assert_eq!(row.render(100..), "");
     // Words
     let row = Row::new("The quick brown fox jumped over the lazy dog!");
     assert_eq!(row.words(), vec![0, 4, 10, 16, 20, 27, 32, 36, 41, 45]);
@@ -91,27 +96,24 @@ fn test_row() {
     assert_eq!(row.get_char_ptr(17), 12);
     // Splitting
     let row = Row::new("sr饿t肚子rsf萨t订");
-    assert_eq!(row.split(0).unwrap(),
+    assert_eq!(
+        row.split(0).unwrap(),
         (
-            Row { 
-                text: vec![], indices: vec![0], 
-                modified: true, info: std::ptr::null_mut() 
-            }, 
+            Row {
+                text: vec![],
+                indices: vec![0],
+                modified: true,
+                info: std::ptr::null_mut()
+            },
             Row::new("sr饿t肚子rsf萨t订")
         ),
     );
     let mut dummy = Row::new("sr饿t肚子rsf萨t订");
     dummy.modified = true;
-    assert_eq!(
-        row.split(12).unwrap(),
-        (dummy, Row::new("")),
-    );
+    assert_eq!(row.split(12).unwrap(), (dummy, Row::new("")),);
     let mut dummy = Row::new("sr饿t");
     dummy.modified = true;
-    assert_eq!(
-        row.split(4).unwrap(),
-        (dummy, Row::new("肚子rsf萨t订")),
-    );
+    assert_eq!(row.split(4).unwrap(), (dummy, Row::new("肚子rsf萨t订")),);
     // Splicing
     let mut left = Row::new("sr饿t");
     let right = Row::new("肚子rsf萨t订");
@@ -133,34 +135,70 @@ fn test_row() {
 #[test]
 fn test_document() {
     // Test creation
-    assert_eq!(FileInfo::default(), FileInfo { file: None, is_dos: false, tab_width: 4 });
+    assert_eq!(
+        FileInfo::default(),
+        FileInfo {
+            file: None,
+            is_dos: false,
+            tab_width: 4
+        }
+    );
     let mut doc = Document::new((10, 3));
+    assert!(!doc.modified);
     doc.open("examples/test.txt").expect("File not found");
-    assert_eq!(doc.rows, vec![Row { text: vec![], indices: vec![0], modified: false, info: &mut doc.info }]);
+    assert!(!doc.modified);
+    assert_eq!(
+        doc.rows,
+        vec![Row {
+            text: vec![],
+            indices: vec![0],
+            modified: false,
+            info: &mut doc.info
+        }]
+    );
     doc.open("examples/test2.txt").expect("File not found");
-    assert_eq!(doc.rows, vec![
-        Row::new("My").link(&mut doc.info), 
-        Row::new("new好").link(&mut doc.info), 
-        Row::new("document").link(&mut doc.info), 
-        Row::new("好").link(&mut doc.info),
-        Row::new("").link(&mut doc.info),
-    ]);
+    assert!(!doc.modified);
+    assert_eq!(
+        doc.rows,
+        vec![
+            Row::new("My").link(&mut doc.info),
+            Row::new("new好").link(&mut doc.info),
+            Row::new("document").link(&mut doc.info),
+            Row::new("好").link(&mut doc.info),
+            Row::new("").link(&mut doc.info),
+        ]
+    );
     // Test row retrieval
-    assert_eq!(doc.row(1).unwrap().clone(), Row::new("new好").link(&mut doc.info));
+    assert_eq!(
+        doc.row(1).unwrap().clone(),
+        Row::new("new好").link(&mut doc.info)
+    );
     doc.cursor.y = 1;
-    assert_eq!(doc.current_row().unwrap().clone(), Row::new("new好").link(&mut doc.info));
+    assert_eq!(
+        doc.current_row().unwrap().clone(),
+        Row::new("new好").link(&mut doc.info)
+    );
     assert_eq!(doc.current_row().unwrap().len(), 4);
     assert_eq!(doc.current_row().unwrap().width(), 5);
     // Test editing
     doc.row_mut(0).unwrap().insert(1, ",").unwrap();
     doc.row_mut(0).unwrap().remove(2..3).unwrap();
-    assert_eq!(doc.rows, vec![
-        Row { text: vec!['M', ','], indices: vec![0, 1, 2], modified: true, info: &mut doc.info },
-        Row::new("new好").link(&mut doc.info),
-        Row::new("document").link(&mut doc.info),
-        Row::new("好").link(&mut doc.info),
-        Row::new("").link(&mut doc.info),
-    ]);
+    assert!(!doc.modified);
+    assert_eq!(
+        doc.rows,
+        vec![
+            Row {
+                text: vec!['M', ','],
+                indices: vec![0, 1, 2],
+                modified: true,
+                info: &mut doc.info
+            },
+            Row::new("new好").link(&mut doc.info),
+            Row::new("document").link(&mut doc.info),
+            Row::new("好").link(&mut doc.info),
+            Row::new("").link(&mut doc.info),
+        ]
+    );
     // Test rendering
     assert_eq!(doc.render(), "M,\nnew好\ndocument\n好\n");
     // Test goto
@@ -208,6 +246,9 @@ fn test_document() {
     assert_eq!(doc.cursor, Loc { x: 0, y: 0 });
     assert_eq!(doc.offset, Loc { x: 0, y: 0 });
     assert_eq!(doc.char_ptr, 0);
+    assert!(doc.goto_x(1000000).is_err());
+    assert!(doc.goto_y(1000000).is_err());
+    assert!(!doc.modified);
 }
 
 #[test]
@@ -410,29 +451,49 @@ fn test_line_snapping() {
 fn test_save() {
     let mut doc = Document::new((10, 3));
     doc.open("examples/test5.txt").expect("File not found");
+    assert!(!doc.modified);
     // Save
-    assert_eq!(doc.rows, vec![Row { 
-        text: vec!['h', 'e', 'l', 'l', 'o'], 
-        indices: vec![0, 1, 2, 3, 4, 5], 
-        modified: false,
-        info: &mut doc.info,
-    }]);
-    doc.row_mut(0).unwrap().remove(0..3).unwrap();
-    assert_eq!(doc.rows, vec![Row { 
-        text: vec!['l', 'o'], 
-        indices: vec![0, 1, 2], 
-        modified: true,
-        info: &mut doc.info,
-    }]);
+    assert_eq!(
+        doc.rows,
+        vec![Row {
+            text: vec!['h', 'e', 'l', 'l', 'o'],
+            indices: vec![0, 1, 2, 3, 4, 5],
+            modified: false,
+            info: &mut doc.info,
+        }]
+    );
+    doc.execute(Event::Remove((1, 0).into(), 'e')).unwrap();
+    assert_eq!(
+        doc.rows,
+        vec![Row {
+            text: vec!['h', 'l', 'l', 'o'],
+            indices: vec![0, 1, 2, 3, 4],
+            modified: true,
+            info: &mut doc.info,
+        }]
+    );
+    assert!(doc.modified);
     assert!(doc.save().is_ok());
-    assert_eq!(std::fs::read_to_string(doc.info.file.as_ref().unwrap()).unwrap(), "lo");
-    doc.row_mut(0).unwrap().insert(0, "hel").unwrap();
+    assert!(!doc.modified);
+    assert_eq!(
+        std::fs::read_to_string(doc.info.file.as_ref().unwrap()).unwrap(),
+        "hllo"
+    );
+    doc.execute(Event::Insert((1, 0).into(), 'e')).unwrap();
+    assert!(doc.modified);
     assert!(doc.save().is_ok());
-    assert_eq!(std::fs::read_to_string(doc.info.file.as_ref().unwrap()).unwrap(), "hello");
+    assert!(!doc.modified);
+    assert_eq!(
+        std::fs::read_to_string(doc.info.file.as_ref().unwrap()).unwrap(),
+        "hello"
+    );
     // Save as
     assert!(!std::path::Path::new("examples/temp.txt").exists());
     assert!(doc.save_as("examples/temp.txt").is_ok());
-    assert_eq!(std::fs::read_to_string("examples/temp.txt").unwrap(), st!("hello"));
+    assert_eq!(
+        std::fs::read_to_string("examples/temp.txt").unwrap(),
+        st!("hello")
+    );
     std::fs::remove_file("examples/temp.txt").unwrap();
     assert!(!std::path::Path::new("examples/temp.txt").exists());
 }
@@ -453,40 +514,70 @@ fn test_execution() {
     let loc: Loc = (2, 4).into();
     assert_eq!(loc, Loc { x: 2, y: 4 });
     let mut doc = Document::new((10, 3));
-    assert_eq!(doc.execute(Event::InsertLine(0, st!(""))).unwrap(), Status::None);
-    assert_eq!(doc.execute(Event::InsertLine(1, st!(""))).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::InsertLine(0, st!(""))).unwrap(),
+        Status::None
+    );
+    assert_eq!(
+        doc.execute(Event::InsertLine(1, st!(""))).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("\n"));
     assert_eq!(doc.loc(), Loc { x: 0, y: 1 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::Insert((0, 1).into(), '!')).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::Insert((0, 1).into(), '!')).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("\n!"));
     assert_eq!(doc.loc(), Loc { x: 1, y: 1 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::Insert((0, 1).into(), ':')).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::Insert((0, 1).into(), ':')).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("\n:!"));
     assert_eq!(doc.loc(), Loc { x: 1, y: 1 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::Insert((0, 0).into(), 'q')).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::Insert((0, 0).into(), 'q')).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("q\n:!"));
     assert_eq!(doc.loc(), Loc { x: 1, y: 0 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::Insert((1, 0).into(), 'x')).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::Insert((1, 0).into(), 'x')).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("qx\n:!"));
     assert_eq!(doc.loc(), Loc { x: 2, y: 0 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::SpliceUp((2, 0).into())).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::SpliceUp((2, 0).into())).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("qx:!"));
     assert_eq!(doc.loc(), Loc { x: 2, y: 0 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::SplitDown((2, 0).into())).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::SplitDown((2, 0).into())).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("qx\n:!"));
     assert_eq!(doc.loc(), Loc { x: 0, y: 1 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::RemoveLine(1, st!(":!"))).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::RemoveLine(1, st!(":!"))).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("qx"));
     assert_eq!(doc.loc(), Loc { x: 0, y: 0 });
     doc.goto((0, 0)).unwrap();
-    assert_eq!(doc.execute(Event::Remove((1, 0).into(), 'x')).unwrap(), Status::None);
+    assert_eq!(
+        doc.execute(Event::Remove((1, 0).into(), 'x')).unwrap(),
+        Status::None
+    );
     assert_eq!(doc.render(), st!("q"));
     assert_eq!(doc.loc(), Loc { x: 0, y: 0 });
 }

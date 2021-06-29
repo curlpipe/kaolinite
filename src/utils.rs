@@ -1,7 +1,7 @@
-use lazy_regex::{Lazy, Regex, lazy_regex};
+use crate::row::Row;
+use lazy_regex::{lazy_regex, Lazy, Regex};
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthChar;
-use crate::row::Row;
 
 /// Whitespace character array
 const WHITESPACE: [char; 2] = [' ', '\t'];
@@ -11,8 +11,11 @@ pub static LINE_ENDING_SPLITTER: Lazy<Regex> = lazy_regex!("(\\r\\n|\\n)");
 pub static TAB_DETECTION: Lazy<Regex> = lazy_regex!("(?ms)(^\\t)");
 
 /// String helper macro
-#[macro_export] macro_rules! st {
-    ($value:expr) => { $value.to_string() };
+#[macro_export]
+macro_rules! st {
+    ($value:expr) => {
+        $value.to_string()
+    };
 }
 
 /// A struct that holds positions
@@ -68,14 +71,14 @@ pub fn words(row: &Row) -> Vec<usize> {
         match row.text[chr] {
             // Move forward through all the spaces
             ' ' => dis += 1,
-            '\t' => { 
+            '\t' => {
                 // If we haven't encountered text yet
-                if pad { 
+                if pad {
                     // Make this a word boundary
-                    result.push(dis); 
-                } 
+                    result.push(dis);
+                }
                 // Move forward
-                dis += tabs; 
+                dis += tabs;
             }
             _ => {
                 // Set the marker to false, as we're encountering text

@@ -1,8 +1,8 @@
-use crate::event::{Result, Status, Error};
 use crate::document::FileInfo;
-use crate::utils::raw_indices;
-use unicode_width::{UnicodeWidthStr, UnicodeWidthChar};
+use crate::event::{Error, Result, Status};
 use crate::st;
+use crate::utils::raw_indices;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// A struct that contains all the basic tools necessary to manage rows in a document
 #[derive(Debug, PartialEq, Clone)]
@@ -54,7 +54,9 @@ impl Row {
 
     /// Insert text at a position
     pub fn insert<S: Into<String>>(&mut self, start: usize, text: S) -> Result<Status> {
-        if start > self.width() { return Err(Error::OutOfRange) }
+        if start > self.width() {
+            return Err(Error::OutOfRange);
+        }
         let text = text.into();
         self.text.splice(start..start, text.chars());
         // TODO: Optimise
@@ -67,7 +69,9 @@ impl Row {
     /// Remove text in a range
     pub fn remove(&mut self, range: std::ops::Range<usize>) -> Result<Status> {
         let (start, end) = (range.start, range.end);
-        if start > self.width() { return Err(Error::OutOfRange) }
+        if start > self.width() {
+            return Err(Error::OutOfRange);
+        }
         self.text.splice(start..end, []);
         // TODO: Optimise
         let tabs = self.get_tab_width();
@@ -78,8 +82,12 @@ impl Row {
 
     /// Splits this row into two separate rows
     pub fn split(&self, idx: usize) -> Result<(Row, Row)> {
-        let left = self.text[..idx].iter().fold(st!(""), |a, x| format!("{}{}", a, x));
-        let right = self.text[idx..].iter().fold(st!(""), |a, x| format!("{}{}", a, x));
+        let left = self.text[..idx]
+            .iter()
+            .fold(st!(""), |a, x| format!("{}{}", a, x));
+        let right = self.text[idx..]
+            .iter()
+            .fold(st!(""), |a, x| format!("{}{}", a, x));
         let mut left = Row::new(left).link(self.info);
         left.modified = true;
         let right = Row::new(right).link(self.info);
@@ -91,7 +99,12 @@ impl Row {
         let mut text = self.text.clone();
         text.append(&mut row.text);
         let indices = Row::raw_to_indices(&text, self.get_tab_width());
-        Ok(Row { indices, text, modified: true, info: self.info })
+        Ok(Row {
+            indices,
+            text,
+            modified: true,
+            info: self.info,
+        })
     }
 
     /// Retrieve the indices of word boundaries
@@ -113,18 +126,22 @@ impl Row {
     /// " "         // 8..
     /// ""          // 9..
     /// ```
-    /// This also handles double width characters by inserting whitespace when half 
+    /// This also handles double width characters by inserting whitespace when half
     /// of the character is off the screen
     pub fn render(&self, range: std::ops::RangeFrom<usize>) -> String {
         let mut start = range.start;
         let text = self.render_full();
         // Return an empty string if start is out of range
-        if start >= text.width() { return st!(""); }
+        if start >= text.width() {
+            return st!("");
+        }
         // Obtain the character indices
         let ind = raw_indices(&text, &self.indices);
         // Shift the cut point forward until on a character boundary
         let space = !ind.contains_key(&start);
-        while !ind.contains_key(&start) { start += 1; }
+        while !ind.contains_key(&start) {
+            start += 1;
+        }
         // Perform cut and format
         format!("{}{}", if space { " " } else { "" }, &text[ind[&start]..])
     }
@@ -134,7 +151,15 @@ impl Row {
         // Retrieve tab width
         let tabs = self.get_tab_width();
         self.text.iter().fold(st!(""), |a, x| {
-            format!("{}{}", a, if x == &'\t' { " ".repeat(tabs) } else { x.to_string() })
+            format!(
+                "{}{}",
+                a,
+                if x == &'\t' {
+                    " ".repeat(tabs)
+                } else {
+                    x.to_string()
+                }
+            )
         })
     }
 
@@ -151,8 +176,8 @@ impl Row {
     /// Calculate the character pointer from a display index
     pub fn get_char_ptr(&self, x: usize) -> usize {
         // Handle large values of x
-        if x >= self.width() { 
-            return self.len() 
+        if x >= self.width() {
+            return self.len();
         }
         // Calculate the character width
         self.indices.iter().position(|i| &x == i).unwrap()
@@ -163,13 +188,26 @@ impl Row {
         let mut data = vec![&'\x00'];
         data.splice(1.., text);
         data.iter()
-            .map(|c| if c == &&'\t' { tab_width } else { c.width().unwrap_or(0) })
-            .scan(0, |a, x| { *a += x; Some(*a) })
+            .map(|c| {
+                if c == &&'\t' {
+                    tab_width
+                } else {
+                    c.width().unwrap_or(0)
+                }
+            })
+            .scan(0, |a, x| {
+                *a += x;
+                Some(*a)
+            })
             .collect()
     }
 
     /// Retrieve the tab width from the document info
     pub fn get_tab_width(&self) -> usize {
-        if self.info.is_null() { 4 } else { unsafe { &*self.info }.tab_width }
+        if self.info.is_null() {
+            4
+        } else {
+            unsafe { &*self.info }.tab_width
+        }
     }
 }
