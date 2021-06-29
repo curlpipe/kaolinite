@@ -29,9 +29,9 @@ pub struct Loc {
     pub y: usize,
 }
 
-impl Into<Loc> for (usize, usize) {
-    fn into(self) -> Loc {
-        let (x, y) = self;
+impl From<(usize, usize)> for Loc {
+    fn from(loc: (usize, usize)) -> Loc {
+        let (x, y) = loc;
         Loc { x, y }
     }
 }
@@ -43,14 +43,15 @@ pub struct Size {
     pub h: usize,
 }
 
-impl Into<Size> for (usize, usize) {
-    fn into(self) -> Size {
-        let (w, h) = self;
+impl From<(usize, usize)> for Size {
+    fn from(size: (usize, usize)) -> Size {
+        let (w, h) = size;
         Size { w, h }
     }
 }
 
 /// Generate a look up table between the raw and display indices
+#[must_use]
 pub fn raw_indices(s: &str, i: &[usize]) -> HashMap<usize, usize> {
     let mut raw = 0;
     let mut indices = HashMap::new();
@@ -63,6 +64,7 @@ pub fn raw_indices(s: &str, i: &[usize]) -> HashMap<usize, usize> {
 }
 
 /// Retrieve the indices of word boundaries
+#[must_use]
 pub fn words(row: &Row) -> Vec<usize> {
     // Gather information and set up algorithm
     let tabs = row.get_tab_width();
@@ -72,7 +74,8 @@ pub fn words(row: &Row) -> Vec<usize> {
     let mut pad = true;
     // While still inside the row
     while chr < row.text.len() {
-        match row.text[chr] {
+        let c = row.text[chr];
+        match c {
             // Move forward through all the spaces
             ' ' => dis += 1,
             '\t' => {

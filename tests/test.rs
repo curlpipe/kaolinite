@@ -33,7 +33,10 @@ fn test_line_splitter() {
 #[test]
 fn test_row() {
     // Loading
+    let row = Row::new("");
+    assert!(row.is_empty());
     let mut row = Row::new("aa好b好c");
+    assert!(!row.is_empty());
     assert_eq!(row.text, vec!['a', 'a', '好', 'b', '好', 'c']);
     assert_eq!(row.indices, vec![0, 1, 2, 4, 5, 7, 8]);
     // Editing
@@ -50,7 +53,7 @@ fn test_row() {
     assert_eq!(row.render(6..), " c");
     assert_eq!(row.render(7..), "c");
     assert_eq!(row.render(100..), "");
-    let mut row = Row::new("aa好\tb好c");
+    let row = Row::new("aa好\tb好c");
     assert_eq!(row.render_full(), "aa好    b好c");
     assert_eq!(row.render_raw(), "aa好\tb好c");
     // Words

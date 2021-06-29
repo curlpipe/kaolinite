@@ -62,6 +62,7 @@
 //! You can use that as a starting point, if you wish.
 
 #![warn(clippy::all, clippy::pedantic)]
+#![allow(clippy::cast_sign_loss)]
 
 pub mod document;
 pub mod event;

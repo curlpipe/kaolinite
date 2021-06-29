@@ -3,7 +3,7 @@
 //! Here is where you'll find the most important struct: [Document]
 //! Please see the documentation over at [kaolinite](crate) for more information
 //!
-//! This module also contains the [FileInfo] struct, which contains information
+//! This module also contains the [`FileInfo`] struct, which contains information
 //! about the opened file, which holds things like the file name, file ending and tab width.
 //!
 //! See the structs section below to find out more about each struct
@@ -29,7 +29,7 @@ pub struct FileInfo {
 }
 
 impl Default for FileInfo {
-    /// Create a FileInfo struct with default data
+    /// Create a `FileInfo` struct with default data
     fn default() -> Self {
         Self {
             file: None,
@@ -156,7 +156,7 @@ impl Document {
             }
             Event::Remove(loc, _) => {
                 self.goto(loc)?;
-                self.row_mut(loc.y)?.remove(loc.x..loc.x + 1)?;
+                self.row_mut(loc.y)?.remove(loc.x..=loc.x)?;
                 self.modified = true;
                 self.move_left()
             }
@@ -278,9 +278,9 @@ impl Document {
         for _ in 0..self.get_width(-1)? {
             // Determine whether to change offset or cursor
             if self.cursor.x == 0 {
-                self.offset.x -= 1
+                self.offset.x -= 1;
             } else {
-                self.cursor.x -= 1
+                self.cursor.x -= 1;
             }
         }
         self.char_ptr -= 1;
@@ -351,11 +351,12 @@ impl Document {
     }
 
     /// Render the document into the correct form
+    #[must_use]
     pub fn render(&self) -> String {
         let line_ending = if self.info.is_dos { "\r\n" } else { "\n" };
         self.rows
             .iter()
-            .map(|x| x.render_raw())
+            .map(Row::render_raw)
             .collect::<Vec<_>>()
             .join(line_ending)
     }
@@ -375,9 +376,9 @@ impl Document {
         // Perform adjustment
         for _ in 0..adjustment {
             if self.cursor.x == 0 {
-                self.offset.x -= 1
+                self.offset.x -= 1;
             } else {
-                self.cursor.x -= 1
+                self.cursor.x -= 1;
             }
         }
         Ok(())
@@ -395,31 +396,32 @@ impl Document {
     /// # Errors
     /// This will error if the index is out of range
     pub fn row(&self, index: usize) -> Result<&Row> {
-        Ok(self.rows.get(index).ok_or(Error::OutOfRange)?)
+        self.rows.get(index).ok_or(Error::OutOfRange)
     }
 
     /// Return a mutable reference to a row in the document
     /// # Errors
     /// This will error if the index is out of range
     pub fn row_mut(&mut self, index: usize) -> Result<&mut Row> {
-        Ok(self.rows.get_mut(index).ok_or(Error::OutOfRange)?)
+        self.rows.get_mut(index).ok_or(Error::OutOfRange)
     }
 
     /// Get the current row
     /// # Errors
     /// This will error if the cursor position isn't on a existing row
     pub fn current_row(&self) -> Result<&Row> {
-        Ok(self.row(self.loc().y)?)
+        self.row(self.loc().y)
     }
 
     /// Get the width of a character
-    fn get_width(&self, offset: isize) -> Result<u16> {
+    fn get_width(&self, offset: i128) -> Result<usize> {
         // TODO: Optimise using arithmetic rather than width calculation
-        let idx = (self.char_ptr as isize + offset) as usize;
-        Ok(self.current_row()?.text[idx].width().unwrap_or(0) as u16)
+        let idx = (self.char_ptr as i128 + offset) as usize;
+        Ok(self.current_row()?.text[idx].width().unwrap_or(0))
     }
 
     /// Get the current position in the document
+    #[must_use]
     pub const fn loc(&self) -> Loc {
         Loc {
             x: self.cursor.x + self.offset.x,

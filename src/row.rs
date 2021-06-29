@@ -49,7 +49,7 @@ impl Row {
 
     /// This method provides a neat way to link a row to a file info
     /// You usually don't need to use this method yourself
-    /// It is used by Document to link it's FileInfo struct
+    /// It is used by Document to link it's [`FileInfo`](crate::document::FileInfo) struct
     /// to each Row for configuration purposes
     pub fn link(mut self, link: *mut FileInfo) -> Self {
         self.info = link;
@@ -77,12 +77,16 @@ impl Row {
     /// Remove text in a range
     /// # Errors
     /// Will return `Err` if `range` is out of range of the row
-    pub fn remove(&mut self, range: std::ops::Range<usize>) -> Result<Status> {
-        let (start, end) = (range.start, range.end);
-        if start > self.width() {
-            return Err(Error::OutOfRange);
+    pub fn remove<R>(&mut self, range: R) -> Result<Status>
+    where
+        R: std::ops::RangeBounds<usize>,
+    {
+        if let std::ops::Bound::Included(start) = range.start_bound() {
+            if start > &self.width() {
+                return Err(Error::OutOfRange);
+            }
         }
-        self.text.splice(start..end, []);
+        self.text.splice(range, []);
         // TODO: Optimise
         let tabs = self.get_tab_width();
         self.indices = Row::raw_to_indices(&self.text, tabs);
@@ -135,6 +139,7 @@ impl Row {
     /// // This would get the word boundaries of the first row: [0, 4, 10, 16, 19]
     /// println!("{:?}", doc.row(0).words());
     /// ```
+    #[must_use]
     pub fn words(&self) -> Vec<usize> {
         crate::utils::words(self)
     }
@@ -155,6 +160,7 @@ impl Row {
     /// ```
     /// This also handles double width characters by inserting whitespace when half
     /// of the character is off the screen
+    #[must_use]
     pub fn render(&self, range: std::ops::RangeFrom<usize>) -> String {
         let mut start = range.start;
         let text = self.render_full();
@@ -174,6 +180,7 @@ impl Row {
     }
 
     /// Render the entire row, with tabs converted into spaces
+    #[must_use]
     pub fn render_full(&self) -> String {
         // Retrieve tab width
         let tabs = self.get_tab_width();
@@ -191,28 +198,38 @@ impl Row {
     }
 
     /// Render this row as is, with no tab interference
+    #[must_use]
     pub fn render_raw(&self) -> String {
         self.text.iter().fold(st!(""), |a, x| format!("{}{}", a, x))
     }
 
     /// Find the character length of this row
+    #[must_use]
     pub fn len(&self) -> usize {
         self.text.len()
     }
 
+    /// Determine if the row is empty
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Find the display width of this row
+    #[must_use]
     pub fn width(&self) -> usize {
         self.render_full().width()
     }
 
     /// Calculate the character pointer from a display index
+    #[must_use]
     pub fn get_char_ptr(&self, x: usize) -> usize {
         // Handle large values of x
         if x >= self.width() {
             return self.len();
         }
         // Calculate the character width
-        self.indices.iter().position(|i| &x == i).unwrap()
+        self.indices.iter().position(|i| &x == i).unwrap_or(0)
     }
 
     /// Find the widths of the characters in raw text
@@ -235,6 +252,7 @@ impl Row {
     }
 
     /// Retrieve the tab width from the document info
+    #[must_use]
     pub fn get_tab_width(&self) -> usize {
         if self.info.is_null() {
             4
