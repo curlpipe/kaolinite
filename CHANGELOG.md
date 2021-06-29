@@ -5,10 +5,13 @@ This project uses semantic versioning.
 
 <!--
 ## [X.Y.Z] - DD/MM/YYYY
- - \+
- - \~
- - \-
+\+
+\~
+\-
 -->
+
+## [0.1.2] - 29/06/2021
+\+ Added benchmark
 
 ## [0.1.1] - 29/06/2021
 \+ Added changelog
