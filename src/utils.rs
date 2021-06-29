@@ -16,14 +16,21 @@ pub static TAB_DETECTION: Lazy<Regex> = lazy_regex!("(?ms)(^\\t)");
 }
 
 /// A struct that holds positions
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Loc {
     pub x: usize,
     pub y: usize,
 }
 
+impl Into<Loc> for (usize, usize) {
+    fn into(self) -> Loc {
+        let (x, y) = self;
+        Loc { x, y }
+    }
+}
+
 /// A struct that holds positions
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Size {
     pub w: usize,
     pub h: usize,

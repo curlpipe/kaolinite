@@ -1,4 +1,4 @@
-use crate::event::{Result, Status};
+use crate::event::{Result, Status, Error};
 use crate::document::FileInfo;
 use crate::utils::raw_indices;
 use unicode_width::{UnicodeWidthStr, UnicodeWidthChar};
@@ -54,6 +54,7 @@ impl Row {
 
     /// Insert text at a position
     pub fn insert<S: Into<String>>(&mut self, start: usize, text: S) -> Result<Status> {
+        if start > self.width() { return Err(Error::OutOfRange) }
         let text = text.into();
         self.text.splice(start..start, text.chars());
         // TODO: Optimise
@@ -66,12 +67,31 @@ impl Row {
     /// Remove text in a range
     pub fn remove(&mut self, range: std::ops::Range<usize>) -> Result<Status> {
         let (start, end) = (range.start, range.end);
+        if start > self.width() { return Err(Error::OutOfRange) }
         self.text.splice(start..end, []);
         // TODO: Optimise
         let tabs = self.get_tab_width();
         self.indices = Row::raw_to_indices(&self.text, tabs);
         self.modified = true;
         Ok(Status::None)
+    }
+
+    /// Splits this row into two separate rows
+    pub fn split(&self, idx: usize) -> Result<(Row, Row)> {
+        let left = self.text[..idx].iter().fold(st!(""), |a, x| format!("{}{}", a, x));
+        let right = self.text[idx..].iter().fold(st!(""), |a, x| format!("{}{}", a, x));
+        let mut left = Row::new(left).link(self.info);
+        left.modified = true;
+        let right = Row::new(right).link(self.info);
+        Ok((left, right))
+    }
+
+    /// Joins this row with another row
+    pub fn splice(&mut self, mut row: Row) -> Result<Row> {
+        let mut text = self.text.clone();
+        text.append(&mut row.text);
+        let indices = Row::raw_to_indices(&text, self.get_tab_width());
+        Ok(Row { indices, text, modified: true, info: self.info })
     }
 
     /// Retrieve the indices of word boundaries

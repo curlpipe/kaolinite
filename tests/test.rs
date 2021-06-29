@@ -44,9 +44,11 @@ fn test_tab_detection() {
 
 #[test]
 fn test_row() {
+    // Loading
     let mut row = Row::new("aa好b好c");
     assert_eq!(row.text, vec!['a', 'a', '好', 'b', '好', 'c']);
     assert_eq!(row.indices, vec![0, 1, 2, 4, 5, 7, 8]);
+    // Editing
     row.insert(3, "hao").unwrap();
     row.insert(2, "ni").unwrap();
     assert_eq!(row.render_full(), "aani好haob好c");
@@ -55,12 +57,14 @@ fn test_row() {
     assert_eq!(row.render(5..), "好c");
     assert_eq!(row.render(6..), " c");
     assert_eq!(row.render(7..), "c");
+    // Words
     let row = Row::new("The quick brown fox jumped over the lazy dog!");
     assert_eq!(row.words(), vec![0, 4, 10, 16, 20, 27, 32, 36, 41, 45]);
     let row = Row::new("\tHello");
     assert_eq!(row.words(), vec![0, 4, 9]);
     let row = Row::new("\t\tHel\tlo");
     assert_eq!(row.words(), vec![0, 4, 8, 15, 17]);
+    // Character pointers
     let row = Row::new("呢逆反驳船r舱s");
     assert_eq!(row.get_char_ptr(0), 0);
     assert_eq!(row.get_char_ptr(2), 1);
@@ -85,12 +89,52 @@ fn test_row() {
     assert_eq!(row.get_char_ptr(14), 10);
     assert_eq!(row.get_char_ptr(15), 11);
     assert_eq!(row.get_char_ptr(17), 12);
+    // Splitting
+    let row = Row::new("sr饿t肚子rsf萨t订");
+    assert_eq!(row.split(0).unwrap(),
+        (
+            Row { 
+                text: vec![], indices: vec![0], 
+                modified: true, info: std::ptr::null_mut() 
+            }, 
+            Row::new("sr饿t肚子rsf萨t订")
+        ),
+    );
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    dummy.modified = true;
+    assert_eq!(
+        row.split(12).unwrap(),
+        (dummy, Row::new("")),
+    );
+    let mut dummy = Row::new("sr饿t");
+    dummy.modified = true;
+    assert_eq!(
+        row.split(4).unwrap(),
+        (dummy, Row::new("肚子rsf萨t订")),
+    );
+    // Splicing
+    let mut left = Row::new("sr饿t");
+    let right = Row::new("肚子rsf萨t订");
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    dummy.modified = true;
+    assert_eq!(left.splice(right).unwrap(), dummy);
+    let mut left = Row::new("");
+    let right = Row::new("sr饿t肚子rsf萨t订");
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    dummy.modified = true;
+    assert_eq!(left.splice(right).unwrap(), dummy);
+    let mut left = Row::new("sr饿t肚子rsf萨t订");
+    let right = Row::new("");
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    dummy.modified = true;
+    assert_eq!(left.splice(right).unwrap(), dummy);
 }
 
 #[test]
 fn test_document() {
+    // Test creation
     assert_eq!(FileInfo::default(), FileInfo { file: None, is_dos: false, tab_width: 4 });
-    let mut doc = Document::new((10, 10));
+    let mut doc = Document::new((10, 3));
     doc.open("examples/test.txt").expect("File not found");
     assert_eq!(doc.rows, vec![Row { text: vec![], indices: vec![0], modified: false, info: &mut doc.info }]);
     doc.open("examples/test2.txt").expect("File not found");
@@ -101,6 +145,13 @@ fn test_document() {
         Row::new("好").link(&mut doc.info),
         Row::new("").link(&mut doc.info),
     ]);
+    // Test row retrieval
+    assert_eq!(doc.row(1).unwrap().clone(), Row::new("new好").link(&mut doc.info));
+    doc.cursor.y = 1;
+    assert_eq!(doc.current_row().unwrap().clone(), Row::new("new好").link(&mut doc.info));
+    assert_eq!(doc.current_row().unwrap().len(), 4);
+    assert_eq!(doc.current_row().unwrap().width(), 5);
+    // Test editing
     doc.row_mut(0).unwrap().insert(1, ",").unwrap();
     doc.row_mut(0).unwrap().remove(2..3).unwrap();
     assert_eq!(doc.rows, vec![
@@ -110,12 +161,53 @@ fn test_document() {
         Row::new("好").link(&mut doc.info),
         Row::new("").link(&mut doc.info),
     ]);
-    assert_eq!(doc.row(1).unwrap().clone(), Row::new("new好").link(&mut doc.info));
-    doc.cursor.y = 1;
-    assert_eq!(doc.current_row().unwrap().clone(), Row::new("new好").link(&mut doc.info));
-    assert_eq!(doc.current_row().unwrap().len(), 4);
-    assert_eq!(doc.current_row().unwrap().width(), 5);
+    // Test rendering
     assert_eq!(doc.render(), "M,\nnew好\ndocument\n好\n");
+    // Test goto
+    doc.open("examples/test3.txt").expect("File not found");
+    assert_eq!(doc.cursor, Loc { x: 0, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 0 });
+    assert_eq!(doc.char_ptr, 0);
+    doc.goto_x(1).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 2, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 0 });
+    assert_eq!(doc.char_ptr, 1);
+    doc.goto_x(13).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 0, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 24, y: 0 });
+    assert_eq!(doc.char_ptr, 13);
+    doc.goto_x(15).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 4, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 24, y: 0 });
+    assert_eq!(doc.char_ptr, 15);
+    doc.goto_x(0).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 0, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 0 });
+    assert_eq!(doc.char_ptr, 0);
+    doc.goto_y(1).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 0, y: 1 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 0 });
+    assert_eq!(doc.char_ptr, 0);
+    doc.goto_y(6).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 0, y: 2 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 4 });
+    assert_eq!(doc.char_ptr, 0);
+    doc.goto_y(4).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 0, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 4 });
+    assert_eq!(doc.char_ptr, 0);
+    doc.goto_y(0).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 0, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 0 });
+    assert_eq!(doc.char_ptr, 0);
+    doc.goto((1, 1)).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 1, y: 1 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 0 });
+    assert_eq!(doc.char_ptr, 1);
+    doc.goto_y(0).unwrap();
+    assert_eq!(doc.cursor, Loc { x: 0, y: 0 });
+    assert_eq!(doc.offset, Loc { x: 0, y: 0 });
+    assert_eq!(doc.char_ptr, 0);
 }
 
 #[test]
@@ -354,4 +446,47 @@ fn test_tab() {
     assert_eq!(doc.render(), st!("  hello\n    hello"));
     println!("{}", doc.info.tab_width);
     assert_eq!(doc.row(0).unwrap().indices, vec![0, 2, 3, 4, 5, 6, 7]);
+}
+
+#[test]
+fn test_execution() {
+    let loc: Loc = (2, 4).into();
+    assert_eq!(loc, Loc { x: 2, y: 4 });
+    let mut doc = Document::new((10, 3));
+    assert_eq!(doc.execute(Event::InsertLine(0, st!(""))).unwrap(), Status::None);
+    assert_eq!(doc.execute(Event::InsertLine(1, st!(""))).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("\n"));
+    assert_eq!(doc.loc(), Loc { x: 0, y: 1 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::Insert((0, 1).into(), '!')).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("\n!"));
+    assert_eq!(doc.loc(), Loc { x: 1, y: 1 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::Insert((0, 1).into(), ':')).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("\n:!"));
+    assert_eq!(doc.loc(), Loc { x: 1, y: 1 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::Insert((0, 0).into(), 'q')).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("q\n:!"));
+    assert_eq!(doc.loc(), Loc { x: 1, y: 0 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::Insert((1, 0).into(), 'x')).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("qx\n:!"));
+    assert_eq!(doc.loc(), Loc { x: 2, y: 0 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::SpliceUp((2, 0).into())).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("qx:!"));
+    assert_eq!(doc.loc(), Loc { x: 2, y: 0 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::SplitDown((2, 0).into())).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("qx\n:!"));
+    assert_eq!(doc.loc(), Loc { x: 0, y: 1 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::RemoveLine(1, st!(":!"))).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("qx"));
+    assert_eq!(doc.loc(), Loc { x: 0, y: 0 });
+    doc.goto((0, 0)).unwrap();
+    assert_eq!(doc.execute(Event::Remove((1, 0).into(), 'x')).unwrap(), Status::None);
+    assert_eq!(doc.render(), st!("q"));
+    assert_eq!(doc.loc(), Loc { x: 0, y: 0 });
 }

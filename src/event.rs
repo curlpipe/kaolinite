@@ -1,4 +1,5 @@
 // event.rs - Contains enums that represent the status of the editor and events
+use crate::utils::Loc;
 use thiserror::Error;
 
 /// Neater error type
@@ -7,8 +8,18 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Event represents all the document events that could occur
 #[derive(Debug)]
 pub enum Event {
-    /// Opens a file in the document
-    OpenFile(String),
+    /// Insert a character at a position.
+    Insert(Loc, char),
+    /// Remove a character at a position
+    Remove(Loc, char),
+    /// Insert a line
+    InsertLine(usize, String),
+    /// Remove a line
+    RemoveLine(usize, String),
+    /// Cut a line in half and drop the last half down a line
+    SplitDown(Loc),
+    /// Splice a line with the line above
+    SpliceUp(Loc),
 }
 
 /// Status contains the states the document can be in after an event execution

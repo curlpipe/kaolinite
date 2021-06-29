@@ -1,5 +1,5 @@
 use crate::utils::{Loc, Size, LINE_ENDING_SPLITTER};
-use crate::event::{Result, Error, Status};
+use crate::event::{Result, Error, Status, Event};
 use unicode_width::UnicodeWidthChar;
 use crate::row::Row;
 use std::fs;
@@ -18,6 +18,7 @@ pub struct FileInfo {
 }
 
 impl Default for FileInfo {
+    /// Create a FileInfo struct with default data
     fn default() -> Self {
         Self {
             file: None,
@@ -57,7 +58,8 @@ impl Document {
             char_ptr: 0,
         }
     }
-    /// Open a file at a specified path into this document
+
+    /// Open a file at a specified path into this document.
     /// This will also reset the cursor position, offset position, 
     /// file name, contents and line ending information
     #[cfg(not(tarpaulin_include))]
@@ -94,19 +96,98 @@ impl Document {
         Ok(())
     }
 
-    /// Return a reference to a row in the document
-    pub fn row(&self, index: usize) -> Result<&Row> {
-        Ok(self.rows.get(index).ok_or(Error::OutOfRange)?)
+    /// Execute an event in this document
+    pub fn execute(&mut self, event: Event) -> Result<Status> {
+        match event {
+            Event::Insert(loc, ch) => {
+                self.goto(loc)?;
+                self.row_mut(loc.y)?.insert(loc.x, ch)?;
+                self.move_right()
+            }
+            Event::Remove(loc, _) => {
+                self.goto(loc)?;
+                self.row_mut(loc.y)?.remove(loc.x..loc.x + 1)?;
+                self.move_left()
+            }
+            Event::InsertLine(loc, st) => { 
+                self.rows.insert(loc, Row::new(st).link(&mut self.info));
+                self.goto_y(loc)?;
+                Ok(Status::None)
+            }
+            Event::RemoveLine(loc, _) => { 
+                self.goto_y(loc - if loc == 0 { 0 } else { 1 })?;
+                self.rows.remove(loc);
+                Ok(Status::None)
+            }
+            Event::SpliceUp(loc) => {
+                let mut upper = self.row(loc.y)?.clone();
+                let lower = self.row(loc.y + 1)?.clone();
+                self.rows[loc.y] = upper.splice(lower)?;
+                self.rows.remove(loc.y + 1);
+                self.goto(loc)?;
+                Ok(Status::None)
+            }
+            Event::SplitDown(loc) => {
+                let (left, right) = self.row(loc.y)?.split(loc.x)?;
+                self.rows[loc.y] = left;
+                self.rows.insert(loc.y + 1, right);
+                self.goto((0, loc.y + 1))?;
+                Ok(Status::None)
+            }
+        }
     }
 
-    /// Return a mutable reference to a row in the document
-    pub fn row_mut(&mut self, index: usize) -> Result<&mut Row> {
-        Ok(self.rows.get_mut(index).ok_or(Error::OutOfRange)?)
+    /// Move the cursor to a specific x and y coordinate
+    pub fn goto<L: Into<Loc>>(&mut self, loc: L) -> Result<()> {
+        let loc = loc.into();
+        self.goto_y(loc.y)?;
+        self.goto_x(loc.x)?;
+        Ok(())
     }
 
-    /// Get the current row
-    pub fn current_row(&self) -> Result<&Row> {
-        Ok(self.row(self.loc().y)?)
+    /// Move the cursor to a specific x coordinate
+    /// X is the character index, not the display index
+    pub fn goto_x(&mut self, x: usize) -> Result<()> {
+        if self.char_ptr == x || x > self.current_row()?.len() { return Ok(()) }
+        let viewport = self.offset.x..self.offset.x + self.size.w;
+        self.char_ptr = x;
+        let x = *self.current_row()?.indices.get(x).ok_or(Error::OutOfRange)?;
+        if x < self.size.w {
+            // Cursor is in view when offset is 0
+            self.offset.x = 0;
+            self.cursor.x = x;
+        } else if viewport.contains(&x) {
+            // If the point is in viewport already, only move cursor
+            self.cursor.x = x - self.offset.x;
+        } else {
+            // If the point is out of viewport, set cursor to 0, and adjust offset
+            self.cursor.x = 0;
+            self.offset.x = x;
+        }
+        Ok(())
+    }
+
+    /// Move the cursor to a specific y coordinate
+    pub fn goto_y(&mut self, y: usize) -> Result<()> {
+        if self.loc().y == y { return Ok(()) }
+        let viewport = self.offset.y..self.offset.y + self.size.h;
+        if y < self.size.h {
+            // Cursor is in view when offset is 0
+            self.offset.y = 0;
+            self.cursor.y = y;
+        } else if viewport.contains(&y) {
+            // If the point is in viewport already, only move cursor
+            self.cursor.y = y - self.offset.y;
+        } else {
+            // If the point is out of viewport, move cursor to bottom, and adjust offset
+            self.cursor.y = self.size.h - 1;
+            self.offset.y = y - (self.size.h - 1);
+        }
+        // Snap to grapheme boundary
+        self.snap_grapheme()?;
+        // Correct char pointer
+        self.char_ptr = self.current_row()?.get_char_ptr(self.loc().x);
+        Ok(())
     }
 
     /// Move the cursor to the left
@@ -128,7 +209,7 @@ impl Document {
 
     /// Move the cursor to the right
     pub fn move_right(&mut self) -> Result<Status> {
-        // Check to see if the cursor is already as far left as possible
+        // Check to see if the cursor is already as far right as possible
         if self.char_ptr == self.current_row()?.len() { return Ok(Status::EndOfRow) }
         // Traverse the grapheme
         for _ in 0..self.get_width(0)? {
@@ -191,21 +272,6 @@ impl Document {
             .join(line_ending)
     }
 
-    /// Get the width of a character
-    fn get_width(&self, offset: isize) -> Result<u16> {
-        // TODO: Optimise using arithmetic rather than width calculation
-        let idx = (self.char_ptr as isize + offset) as usize;
-        Ok(self.current_row()?.text[idx].width().unwrap_or(0) as u16)
-    }
-
-    /// Get the current position in the document
-    const fn loc(&self) -> Loc {
-        Loc {
-            x: self.cursor.x + self.offset.x,
-            y: self.cursor.y + self.offset.y,
-        }
-    }
-
     /// Shift the cursor back to the nearest grapheme boundary
     fn snap_grapheme(&mut self) -> Result<()> {
         // Collect information
@@ -233,5 +299,35 @@ impl Document {
     fn raw_to_rows(&mut self, text: &str) -> Vec<Row> {
         let rows: Vec<&str> = LINE_ENDING_SPLITTER.split(text).collect();
         rows.iter().map(|s| Row::new(*s).link(&mut self.info)).collect()
+    }
+
+    /// Return a reference to a row in the document
+    pub fn row(&self, index: usize) -> Result<&Row> {
+        Ok(self.rows.get(index).ok_or(Error::OutOfRange)?)
+    }
+
+    /// Return a mutable reference to a row in the document
+    pub fn row_mut(&mut self, index: usize) -> Result<&mut Row> {
+        Ok(self.rows.get_mut(index).ok_or(Error::OutOfRange)?)
+    }
+
+    /// Get the current row
+    pub fn current_row(&self) -> Result<&Row> {
+        Ok(self.row(self.loc().y)?)
+    }
+
+    /// Get the width of a character
+    fn get_width(&self, offset: isize) -> Result<u16> {
+        // TODO: Optimise using arithmetic rather than width calculation
+        let idx = (self.char_ptr as isize + offset) as usize;
+        Ok(self.current_row()?.text[idx].width().unwrap_or(0) as u16)
+    }
+
+    /// Get the current position in the document
+    pub const fn loc(&self) -> Loc {
+        Loc {
+            x: self.cursor.x + self.offset.x,
+            y: self.cursor.y + self.offset.y,
+        }
     }
 }
