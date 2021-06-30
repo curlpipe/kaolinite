@@ -7,7 +7,7 @@
 use crate::document::FileInfo;
 use crate::event::{Error, Result, Status};
 use crate::st;
-use crate::utils::raw_indices;
+use crate::utils::{raw_indices, BoundedRange};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// A struct that contains all the basic tools necessary to manage rows in a document
@@ -74,20 +74,26 @@ impl Row {
     }
 
     /// Remove text in a range
+    ///
+    /// This takes in an inclusive or exclusive range: `..` and `.=` only.
     /// # Errors
     /// Will return `Err` if `range` is out of range of the row
+    #[allow(clippy::needless_pass_by_value)]
     pub fn remove<R>(&mut self, range: R) -> Result<Status>
     where
-        R: std::ops::RangeBounds<usize>,
+        R: BoundedRange,
     {
-        if let std::ops::Bound::Included(start) = range.start_bound() {
-            if start > &self.width() {
-                return Err(Error::OutOfRange);
-            }
+        let (start, end) = (range.first(), range.last());
+        if start > self.width() {
+            return Err(Error::OutOfRange);
         }
-        self.text.splice(range, []);
-        let tabs = self.get_tab_width();
-        self.indices = Row::raw_to_indices(&self.text, tabs);
+        let shift = self.indices[end] - self.indices[start];
+        self.text.splice(start..end, []);
+        self.indices.splice(start..end, []);
+        self.indices
+            .iter_mut()
+            .skip(start)
+            .for_each(|i| *i -= shift);
         self.modified = true;
         Ok(Status::None)
     }

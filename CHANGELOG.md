@@ -10,6 +10,10 @@ This project uses semantic versioning.
 \-
 -->
 
+## [0.2.0] - 30/06/2021
+\~ Text removal optimisation (~1.25x faster)
+\- Only allowed inclusive and exclusive ranges in Row::remove to prevent spaghettification
+
 ## [0.1.5] - 30/06/2021
 \~ Row splicing optimisation (~1.2x faster)
 

@@ -50,6 +50,31 @@ impl From<(usize, usize)> for Size {
     }
 }
 
+pub trait BoundedRange {
+    fn first(&self) -> usize;
+    fn last(&self) -> usize;
+}
+
+impl BoundedRange for std::ops::Range<usize> {
+    fn first(&self) -> usize {
+        self.start
+    }
+
+    fn last(&self) -> usize {
+        self.end
+    }
+}
+
+impl BoundedRange for std::ops::RangeInclusive<usize> {
+    fn first(&self) -> usize {
+        *self.start()
+    }
+
+    fn last(&self) -> usize {
+        *self.end() + 1
+    }
+}
+
 /// Generate a look up table between the raw and display indices
 #[must_use]
 pub fn raw_indices(s: &str, i: &[usize]) -> HashMap<usize, usize> {

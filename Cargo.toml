@@ -1,6 +1,6 @@
 [package]
 name = "kaolinite"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2018"
 license = "MIT"
 description = "A crate to assist in the creation of TUI text editors."
