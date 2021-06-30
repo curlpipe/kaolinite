@@ -1,6 +1,6 @@
 [package]
 name = "kaolinite"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2018"
 license = "MIT"
 description = "A crate to assist in the creation of TUI text editors."
@@ -8,6 +8,9 @@ repository = "https://github.com/curlpipe/kaolinite"
 readme = "README.md"
 keywords = ["unicode", "text-processing"]
 categories = ["text-processing"]
+
+[profile.release]
+debug = true
 
 [dependencies]
 once_cell = "1.8.0"

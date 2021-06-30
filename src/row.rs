@@ -109,16 +109,20 @@ impl Row {
             modified: false,
         };
         // Shift down
-        let shift = *right.indices.first().unwrap();
+        let shift = *right.indices.first().unwrap_or(&0);
         right.indices.iter_mut().for_each(|i| *i -= shift);
         Ok((left, right))
     }
 
     /// Joins this row with another row
     pub fn splice(&mut self, mut row: Row) -> Row {
+        let mut indices = self.indices.clone();
+        let shift = *self.indices.last().unwrap_or(&0);
+        row.indices.remove(0);
+        row.indices.iter_mut().for_each(|i| *i += shift);
+        indices.append(&mut row.indices);
         let mut text = self.text.clone();
         text.append(&mut row.text);
-        let indices = Row::raw_to_indices(&text, self.get_tab_width());
         Row {
             indices,
             text,
