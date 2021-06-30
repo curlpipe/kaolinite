@@ -54,7 +54,9 @@ impl Row {
     pub fn link(mut self, link: *mut FileInfo) -> Self {
         self.info = link;
         let tabs = self.get_tab_width();
-        self.indices = Row::raw_to_indices(&self.text, tabs);
+        if tabs != 4 {
+            self.indices = Row::raw_to_indices(&self.text, tabs);
+        }
         self
     }
 
@@ -75,7 +77,7 @@ impl Row {
 
     /// Remove text in a range
     ///
-    /// This takes in an inclusive or exclusive range: `..` and `.=` only.
+    /// This takes in an inclusive or exclusive range: `..` and `..=` only.
     /// # Errors
     /// Will return `Err` if `range` is out of range of the row
     #[allow(clippy::needless_pass_by_value)]

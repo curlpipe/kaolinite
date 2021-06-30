@@ -10,6 +10,9 @@ This project uses semantic versioning.
 \-
 -->
 
+## [0.2.1] - 30/06/2021
+\~ Row linking optimisation (~1.33x faster)
+
 ## [0.2.0] - 30/06/2021
 \~ Text removal optimisation (~1.25x faster)
 
