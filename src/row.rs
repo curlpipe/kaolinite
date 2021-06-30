@@ -86,7 +86,6 @@ impl Row {
             }
         }
         self.text.splice(range, []);
-        // TODO: Optimise
         let tabs = self.get_tab_width();
         self.indices = Row::raw_to_indices(&self.text, tabs);
         self.modified = true;
@@ -97,21 +96,21 @@ impl Row {
     /// # Errors
     /// Will return `Err` if `idx` is out of range of the row
     pub fn split(&self, idx: usize) -> Result<(Row, Row)> {
-        let left = self
-            .text
-            .get(..idx)
-            .ok_or(Error::OutOfRange)?
-            .iter()
-            .fold(st!(""), |a, x| format!("{}{}", a, x));
-        let right = self
-            .text
-            .get(idx..)
-            .ok_or(Error::OutOfRange)?
-            .iter()
-            .fold(st!(""), |a, x| format!("{}{}", a, x));
-        let mut left = Row::new(left).link(self.info);
-        left.modified = true;
-        let right = Row::new(right).link(self.info);
+        let left = Row {
+            text: self.text.get(..idx).ok_or(Error::OutOfRange)?.to_vec(),
+            indices: self.indices.get(..=idx).ok_or(Error::OutOfRange)?.to_vec(),
+            info: self.info,
+            modified: true,
+        };
+        let mut right = Row {
+            text: self.text.get(idx..).ok_or(Error::OutOfRange)?.to_vec(),
+            indices: self.indices.get(idx..).ok_or(Error::OutOfRange)?.to_vec(),
+            info: self.info,
+            modified: false,
+        };
+        // Shift down
+        let shift = *right.indices.first().unwrap();
+        right.indices.iter_mut().for_each(|i| *i -= shift);
         Ok((left, right))
     }
 
