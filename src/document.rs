@@ -11,9 +11,8 @@
 use crate::event::{Error, Event, Result, Status};
 use crate::regex;
 use crate::row::Row;
-use crate::utils::{Loc, Size};
+use crate::utils::{width_char, Loc, Size};
 use std::fs;
-use unicode_width::UnicodeWidthChar;
 
 /// A struct that stores information about a file
 #[derive(Debug, PartialEq, Clone)]
@@ -154,11 +153,15 @@ impl Document {
                 self.modified = true;
                 self.move_right()
             }
-            Event::Remove(loc, _) => {
+            Event::Remove(mut loc, _) => {
+                if loc.x == 0 {
+                    return Ok(Status::StartOfRow);
+                }
+                loc.x -= 1;
                 self.goto(loc)?;
                 self.row_mut(loc.y)?.remove(loc.x..=loc.x)?;
                 self.modified = true;
-                self.move_left()
+                Ok(Status::None)
             }
             Event::InsertRow(loc, st) => {
                 self.rows.insert(loc, Row::new(st).link(&mut self.info));
@@ -173,12 +176,16 @@ impl Document {
                 Ok(Status::None)
             }
             Event::SpliceUp(loc) => {
-                let mut upper = self.row(loc.y)?.clone();
-                let lower = self.row(loc.y + 1)?.clone();
-                self.rows[loc.y] = upper.splice(lower);
+                if loc.y == 0 {
+                    return Ok(Status::StartOfDocument);
+                }
+                let mut upper = self.row(loc.y - 1)?.clone();
+                let x = upper.len();
+                let lower = self.row(loc.y)?.clone();
+                self.rows[loc.y - 1] = upper.splice(lower);
                 self.modified = true;
-                self.rows.remove(loc.y + 1);
-                self.goto(loc)?;
+                self.rows.remove(loc.y);
+                self.goto((x, loc.y - 1))?;
                 Ok(Status::None)
             }
             Event::SplitDown(loc) => {
@@ -241,7 +248,7 @@ impl Document {
     /// Will return `Err` if the location provided is out of scope of the document.
     pub fn goto_y(&mut self, y: usize) -> Result<()> {
         // Bounds checking
-        if self.loc().y == y {
+        if self.raw_loc().y == y {
             return Ok(());
         } else if y > self.rows.len() {
             return Err(Error::OutOfRange);
@@ -262,7 +269,7 @@ impl Document {
         // Snap to grapheme boundary
         self.snap_grapheme()?;
         // Correct char pointer
-        self.char_ptr = self.current_row()?.get_char_ptr(self.loc().x);
+        self.char_ptr = self.current_row()?.get_char_ptr(self.raw_loc().x);
         Ok(())
     }
 
@@ -313,7 +320,7 @@ impl Document {
     /// Will return `Err` if the cursor is out of scope of the document
     pub fn move_up(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far up as possible
-        if self.loc().y == 0 {
+        if self.raw_loc().y == 0 {
             return Ok(Status::StartOfDocument);
         }
         // Determine whether to change offset or cursor
@@ -325,7 +332,7 @@ impl Document {
         // Snap to grapheme boundary
         self.snap_grapheme()?;
         // Correct char pointer
-        self.char_ptr = self.current_row()?.get_char_ptr(self.loc().x);
+        self.char_ptr = self.current_row()?.get_char_ptr(self.raw_loc().x);
         Ok(Status::None)
     }
 
@@ -334,7 +341,7 @@ impl Document {
     /// Will return `Err` if the cursor is out of scope of the document
     pub fn move_down(&mut self) -> Result<Status> {
         // Check to see if the cursor is already as far up as possible
-        if self.loc().y == self.rows.len() - 1 {
+        if self.raw_loc().y == self.rows.len() {
             return Ok(Status::EndOfDocument);
         }
         // Determine whether to change offset or cursor
@@ -344,10 +351,25 @@ impl Document {
             self.cursor.y += 1;
         }
         // Snap to grapheme boundary
-        self.snap_grapheme()?;
+        std::mem::drop(self.snap_grapheme());
         // Correct char pointer
-        self.char_ptr = self.current_row()?.get_char_ptr(self.loc().x);
+        self.char_ptr = if let Ok(row) = self.current_row() {
+            row.get_char_ptr(self.raw_loc().x)
+        } else {
+            // Move to 0 when entering row below document
+            self.cursor.x = 0;
+            self.offset.x = 0;
+            0
+        };
         Ok(Status::None)
+    }
+
+    /// Work out the line number text to use
+    #[must_use]
+    pub fn line_number(&self, row: usize) -> String {
+        let total = self.rows.len().to_string().len();
+        let num = (row + 1).to_string();
+        format!("{}{}", " ".repeat(total - num.len()), num)
     }
 
     /// Render the document into the correct form
@@ -359,14 +381,15 @@ impl Document {
             .map(Row::render_raw)
             .collect::<Vec<_>>()
             .join(line_ending)
+            + line_ending
     }
 
     /// Shift the cursor back to the nearest grapheme boundary
     fn snap_grapheme(&mut self) -> Result<()> {
         // Collect information
         let row = self.current_row()?;
-        let start = self.loc().x;
-        let mut ptr = self.loc().x;
+        let start = self.raw_loc().x;
+        let mut ptr = self.raw_loc().x;
         // Shift back until on boundary
         while !row.indices.contains(&ptr) {
             ptr -= 1;
@@ -386,7 +409,8 @@ impl Document {
 
     /// Take raw text and convert it into Row structs
     fn raw_to_rows(&mut self, text: &str) -> Vec<Row> {
-        let rows: Vec<&str> = regex!("(\\r\\n|\\n)").split(text).collect();
+        let text = regex!("(\\r\\n|\\n)$").replace(text, "").to_string();
+        let rows: Vec<&str> = regex!("(\\r\\n|\\n)").split(&text).collect();
         rows.iter()
             .map(|s| Row::new(*s).link(&mut self.info))
             .collect()
@@ -410,21 +434,36 @@ impl Document {
     /// # Errors
     /// This will error if the cursor position isn't on a existing row
     pub fn current_row(&self) -> Result<&Row> {
-        self.row(self.loc().y)
+        self.row(self.raw_loc().y)
     }
 
     /// Get the width of a character
     fn get_width(&self, offset: i128) -> Result<usize> {
         // TODO: Optimise using arithmetic rather than width calculation
         let idx = (self.char_ptr as i128 + offset) as usize;
-        Ok(self.current_row()?.text[idx].width().unwrap_or(0))
+        let ch = self.current_row()?.text[idx];
+        Ok(width_char(ch, self.info.tab_width))
     }
 
     /// Get the current position in the document
+    ///
+    /// This ought to be used by the document only as it returns the display indices
+    /// Use the `Document::loc` function instead.
+    #[must_use]
+    pub const fn raw_loc(&self) -> Loc {
+        Loc {
+            x: self.cursor.x + self.offset.x,
+            y: self.cursor.y + self.offset.y,
+        }
+    }
+
+    /// Get the current position in the document
+    ///
+    /// This will return the character and row indices
     #[must_use]
     pub const fn loc(&self) -> Loc {
         Loc {
-            x: self.cursor.x + self.offset.x,
+            x: self.char_ptr,
             y: self.cursor.y + self.offset.y,
         }
     }

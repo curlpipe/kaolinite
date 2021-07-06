@@ -48,11 +48,11 @@
 //! ```
 //! // Opening a file,
 //! use kaolinite::document::Document;
-//! let mut doc = Document::new();
+//! let mut doc = Document::new((10, 10));
 //! // Imagine if test.txt were `The quick brown fox`
-//! doc.open("test.txt").expect("Failed to open file");
+//! doc.open("examples/test.txt").expect("Failed to open file");
 //! // This would get the word boundaries of the first row: [0, 4, 10, 16, 19]
-//! println!("{:?}", doc.row(0).words());
+//! println!("{:?}", doc.row(0).unwrap().words());
 //! ```
 //!
 //! Because this library is quite a large collection of tools, it's hard to demonstrate it

@@ -1,0 +1,9 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+crossterm = "0.20.0"
+kaolinite = { version = "0", path = "../../" }
+pico-args = { version = "0.4.2", features = ["short-space-opt", "combined-flags"] }

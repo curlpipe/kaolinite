@@ -7,8 +7,7 @@
 use crate::document::FileInfo;
 use crate::event::{Error, Result, Status};
 use crate::st;
-use crate::utils::{raw_indices, BoundedRange};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use crate::utils::{raw_indices, width, width_char, BoundedRange};
 
 /// A struct that contains all the basic tools necessary to manage rows in a document
 #[derive(Debug, PartialEq, Clone)]
@@ -143,15 +142,43 @@ impl Row {
     /// ```
     /// // Opening a file,
     /// use kaolinite::document::Document;
-    /// let mut doc = Document::new();
+    /// let mut doc = Document::new((10, 10));
     /// // Imagine if test.txt were `The quick brown fox`
-    /// doc.open("test.txt").expect("Failed to open file");
+    /// doc.open("examples/test.txt").expect("Failed to open file");
     /// // This would get the word boundaries of the first row: [0, 4, 10, 16, 19]
-    /// println!("{:?}", doc.row(0).words());
+    /// println!("{:?}", doc.row(0).unwrap().words());
     /// ```
     #[must_use]
     pub fn words(&self) -> Vec<usize> {
         crate::utils::words(self)
+    }
+
+    /// Find the next word in this row from the character index
+    #[must_use]
+    pub fn next_word_forth(&self, loc: usize) -> usize {
+        let bounds = self.words();
+        let mut last = *bounds.last().unwrap_or(&0);
+        for bound in bounds.iter().rev() {
+            if bound <= &loc {
+                return last;
+            }
+            last = *bound;
+        }
+        unreachable!()
+    }
+
+    /// Find the previous word in this row from the character index
+    #[must_use]
+    pub fn next_word_back(&self, loc: usize) -> usize {
+        let bounds = self.words();
+        let mut last = 0;
+        for bound in &bounds {
+            if bound >= &loc {
+                return last;
+            }
+            last = *bound;
+        }
+        *bounds.last().unwrap_or(&0)
     }
 
     /// Render part of the row
@@ -173,19 +200,22 @@ impl Row {
     #[must_use]
     pub fn render(&self, range: std::ops::RangeFrom<usize>) -> String {
         let mut start = range.start;
-        let text = self.render_full();
+        // Render the row
+        let text = self.render_raw();
+        let tab_width = self.get_tab_width();
         // Return an empty string if start is out of range
-        if start >= text.width() {
+        if start >= width(&text, tab_width) {
             return st!("");
         }
         // Obtain the character indices
-        let ind = raw_indices(&text, &self.indices);
+        let ind = raw_indices(&text, &self.indices, tab_width);
         // Shift the cut point forward until on a character boundary
         let space = !ind.contains_key(&start);
         while !ind.contains_key(&start) {
             start += 1;
         }
         // Perform cut and format
+        let text = text.replace("\t", &" ".repeat(tab_width));
         format!("{}{}", if space { " " } else { "" }, &text[ind[&start]..])
     }
 
@@ -247,13 +277,7 @@ impl Row {
         let mut data = vec![&'\x00'];
         data.splice(1.., text);
         data.iter()
-            .map(|c| {
-                if c == &&'\t' {
-                    tab_width
-                } else {
-                    c.width().unwrap_or(0)
-                }
-            })
+            .map(|c| width_char(**c, tab_width))
             .scan(0, |a, x| {
                 *a += x;
                 Some(*a)

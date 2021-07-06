@@ -10,6 +10,31 @@ This project uses semantic versioning.
 \-
 -->
 
+## [0.3.0] - 30/06/2021
+\+ Added cactus: a editor to demonstrate kaolinite
+
+\+ Added support for accessing the line below the document
+
+\+ Added a method to generate line number text
+
+\+ Added support for tab rendering
+
+\+ Added methods for finding the next and previous word index
+
+\+ Added functions to help with display widths
+
+\+ Added file type lookup function to determine type from file extension
+
+\~ Fixed issues with removing
+
+\~ Fixed issues with splicing up
+
+\~ Used char indices instead of display indices
+
+\~ Fixed the EOI issues
+
+\~ Followed clippy lints
+
 ## [0.2.1] - 30/06/2021
 \~ Row linking optimisation (~1.33x faster)
 

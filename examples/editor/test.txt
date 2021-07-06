@@ -1,0 +1,14 @@
+Cactus: 400 SLOC editor written with Kaolinite
+
+Use cactus as a starting point for your very own editor if you wish!
+
+Cactus has:
+ - Unicode handling
+ - A status line
+ - Handy shortcuts (word jumping, deletion, home & end)
+ - Filetype detection
+ - Multiple file support
+ - Command line interface
+ - Scrolling of larger documents
+ - Undo & Redo
+ - Syntax highlighting for Rust

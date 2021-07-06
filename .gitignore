@@ -1,8 +1,9 @@
 /target
 /*.html
 /Cargo.lock
-/*.swp
+*.swp
 /src/*.swp
 /tests/*.swp
 /examples/*.swp
 /examples/big.txt
+/examples/editor/target
