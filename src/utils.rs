@@ -153,6 +153,33 @@ pub fn width_char(c: char, tab: usize) -> usize {
     }
 }
 
+/// This will take text, and align it to the middle of the screen
+pub fn align_middle(s: &str, space: usize, tab_width: usize) -> Option<String> {
+    let len = width(s, tab_width) / 2;
+    let half = space / 2;
+    let pad = " ".repeat(half.saturating_sub(len));
+    if len * 2 + pad.len() > space {
+        None
+    } else {
+        Some(format!("{}{}{}", pad, s, pad))
+    }
+}
+
+/// This will take text, and align it to the left and right hand sides
+pub fn align_sides(lhs: &str, rhs: &str, space: usize, tab_width: usize) -> Option<String> {
+    let total = width(lhs, tab_width) + width(rhs, tab_width);
+    if total > space {
+        None
+    } else {
+        Some(format!(
+            "{}{}{}",
+            lhs,
+            " ".repeat(space.saturating_sub(total)),
+            rhs
+        ))
+    }
+}
+
 /// Determine the filetype from the extension
 #[must_use]
 #[allow(clippy::too_many_lines)]

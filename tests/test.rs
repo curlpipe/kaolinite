@@ -254,6 +254,26 @@ fn test_document() {
     assert!(doc.goto_x(1000000).is_err());
     assert!(doc.goto_y(1000000).is_err());
     assert!(!doc.modified);
+    // Check status line info
+    let info = doc.status_line_info();
+    let dummy = hmap! {
+        "row" => st!("1"), "column" => st!("0"), "total" => st!("8"),
+        "file" => st!("test3.txt"), "full_file" => st!("examples/test3.txt"),
+        "type" => st!("Plain Text"), "modified" => st!(""), "extension" => st!("txt"),
+    };
+    assert_eq!(info, dummy);
+    let mut doc = Document::new((10, 10));
+    doc.cursor.x = 3;
+    doc.cursor.y = 5;
+    doc.char_ptr = 3;
+    doc.modified = true;
+    let info = doc.status_line_info();
+    let dummy = hmap! {
+        "row" => st!("6"), "column" => st!("3"), "total" => st!("0"),
+        "file" => st!("[No Name]"), "full_file" => st!("[No Name]"),
+        "type" => st!("Unknown"), "modified" => st!("[+]"), "extension" => st!(""),
+    };
+    assert_eq!(info, dummy);
 }
 
 #[test]
@@ -625,4 +645,21 @@ fn test_line_numbers() {
     doc.open("examples/test7.txt").unwrap();
     assert_eq!(doc.line_number(0), st!(" 1"));
     assert_eq!(doc.line_number(20), st!("21"));
+}
+
+#[test]
+fn test_alignment() {
+    assert_eq!(align_middle("hel\tlo!", 10, 2).unwrap(), st!(" hel\tlo! "));
+    assert_eq!(align_middle("hel\tlo!", 8, 2).unwrap(), st!("hel\tlo!"));
+    assert!(align_middle("hel\tlo!", 5, 2).is_none());
+    assert_eq!(
+        align_sides(" hel\tl", "o! ", 15, 4).unwrap(),
+        st!(" hel\tl   o! ")
+    );
+    assert_eq!(
+        align_sides("hel\tl", "o!", 15, 4).unwrap(),
+        st!("hel\tl     o!")
+    );
+    assert_eq!(align_sides("hel\tl", "o!", 10, 4).unwrap(), st!("hel\tlo!"));
+    assert!(align_sides(" hel\tl", "o! ", 10, 4).is_none());
 }

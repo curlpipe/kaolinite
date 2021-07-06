@@ -1,10 +1,11 @@
 /*
     Editor - A demonstration of the Kaolinite
-    in 272 SLOC (without comments and blanks)
+    in 258 SLOC (without comments and blanks)
     using the Crossterm crate
 
     This editor has unicode and scrolling support, a basic status line, a command line interface
-    handles editing multiple files, saving files, filetype detection, line numbers and word jumping
+    handles editing multiple files, saving files, filetype detection, line numbers and word jumping,
+    line wrapping
 */
 
 use crossterm::{
@@ -16,27 +17,30 @@ use crossterm::{
     Result,
 };
 use kaolinite::document::Document;
-use kaolinite::event::{Status, Event};
+use kaolinite::event::{Event, Status};
 use kaolinite::st;
-use kaolinite::utils::{filetype, Loc, Size, width};
+use kaolinite::utils::{align_sides, Loc, Size};
 use pico_args::Arguments;
 use std::io::{stdout, Error, ErrorKind, Write};
-use std::path::Path;
 
+const STATUS_BG: Bg = Bg(Color::Rgb {
+    r: 31,
+    g: 92,
+    b: 62,
+});
+const RESET_BG: Bg = Bg(Color::Reset);
 const USAGE: &str = "\
 Editor: A basic command line text editor that demonstrates the kaolinite crate.
 
-Usage:
-    editor [files] [options]
+USAGE: editor [files] [options]
 
-Options:
+OPTIONS:
     --help, -h :  Show this help message
 
-Examples:
+EXAMPLES:
     editor test.txt
     editor test.txt test2.txt
-    editor /home/user/dev/editor/main.rs\
-";
+    editor /home/user/dev/editor/main.rs";
 
 fn size() -> Result<Size> {
     // This function gets the size from crossterm and converts it to a Loc
@@ -131,62 +135,22 @@ impl Editor {
             execute!(self.stdout, MoveTo(0, y as u16), Clear(ClType::CurrentLine))?;
             if y == size.h {
                 // Render status line
-                let filename = if let Some(name) = &self.doc().info.file {
-                    Path::new(&name)
-                        .file_name()
-                        .unwrap()
-                        .to_str()
-                        .unwrap_or("")
-                        .to_string()
-                } else {
-                    st!("[No Name]")
-                };
-                let kind = filetype(
-                    Path::new(&filename)
-                        .extension()
-                        .unwrap()
-                        .to_str()
-                        .unwrap_or(""),
-                );
+                let info = self.doc().status_line_info();
                 // Left and right hand sides of status line
                 let lhs = format!(
-                    " {}{} {}| {}/{} |",
-                    filename,
-                    if self.doc().modified { "[+]" } else { "" },
-                    if let Some(kind) = kind {
-                        format!("| {} ", kind)
-                    } else {
-                        st!("")
-                    },
+                    " {}{} | {} | {}/{} |",
+                    info["file"],
+                    info["modified"],
+                    info["type"],
                     self.doc_ptr + 1,
                     self.documents.len()
                 );
-                let rhs = format!(
-                    "| {}/{} | {} ",
-                    self.doc().loc().y + 1,
-                    self.doc().rows.len(),
-                    self.doc().loc().x
-                );
+                let rhs = format!("| {}/{} | {} ", info["row"], info["total"], info["column"]);
                 // Calculate padding and render the status line with a coloured background
                 let tab_width = self.doc().info.tab_width;
-                let display_width = width(&lhs, tab_width) + width(&rhs, tab_width);
-                write!(
-                    self.stdout,
-                    "{}{}{}{}{}",
-                    Bg(Color::Rgb {
-                        r: 31,
-                        g: 92,
-                        b: 62
-                    }),
-                    lhs,
-                    if display_width >= size.w {
-                        st!("")
-                    } else {
-                        " ".repeat(size.w - display_width)
-                    },
-                    rhs,
-                    Bg(Color::Reset),
-                )?;
+                let status_line = align_sides(&lhs, &rhs, size.w, tab_width)
+                    .unwrap_or_else(|| " ".repeat(size.w));
+                write!(self.stdout, "{}{}{}", STATUS_BG, status_line, RESET_BG)?;
             } else {
                 // Render document rows
                 // Determine if the line exists, if not, draw a ~
@@ -346,7 +310,9 @@ impl Editor {
         let doc = self.doc();
         let y = doc.loc().y;
         if y == doc.rows.len() {
-            self.doc_mut().execute(Event::InsertRow(y, st!(""))).unwrap();
+            self.doc_mut()
+                .execute(Event::InsertRow(y, st!("")))
+                .unwrap();
         }
     }
 

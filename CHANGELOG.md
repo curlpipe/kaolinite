@@ -10,6 +10,11 @@ This project uses semantic versioning.
 \-
 -->
 
+## [0.3.2] - 06/07/2021
+\+ Added alignment helper
+
+\+ Added status line formatting helper
+
 ## [0.3.1] - 06/07/2021
 \~ Fixed panic issues in next_word_forth
 

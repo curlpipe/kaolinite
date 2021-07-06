@@ -9,10 +9,12 @@
 //! See the structs section below to find out more about each struct
 
 use crate::event::{Error, Event, Result, Status};
-use crate::regex;
 use crate::row::Row;
-use crate::utils::{width_char, Loc, Size};
+use crate::utils::{filetype, width_char, Loc, Size};
+use crate::{regex, st};
+use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 
 /// A struct that stores information about a file
 #[derive(Debug, PartialEq, Clone)]
@@ -370,6 +372,52 @@ impl Document {
         let total = self.rows.len().to_string().len();
         let num = (row + 1).to_string();
         format!("{}{}", " ".repeat(total - num.len()), num)
+    }
+
+    /// A helper function that returns info about the document
+    /// in a [`HashMap`] type.
+    ///
+    /// It will return (with keys for the hashmap):
+    /// - Row number: `row`
+    /// - Column number: `column`
+    /// - Total rows: `total`
+    /// - File name (no path): `file`
+    /// - File name (full path): `full_file`
+    /// - File type: `type`
+    /// - Modifed indicator: `modified`
+    /// - File extension: `extension`
+    pub fn status_line_info(&self) -> HashMap<&str, String> {
+        let row = self.loc().y + 1;
+        let total = self.rows.len();
+        let column = self.loc().x;
+        let modified = if self.modified { "[+]" } else { "" };
+        let (full_file, file, ext) = if let Some(name) = &self.info.file {
+            let f = Path::new(&name)
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap_or(name)
+                .to_string();
+            let e = Path::new(&name)
+                .extension()
+                .unwrap()
+                .to_str()
+                .unwrap_or("")
+                .to_string();
+            (name.clone(), f, e)
+        } else {
+            (st!("[No Name]"), st!("[No Name]"), st!(""))
+        };
+        let mut info = HashMap::new();
+        info.insert("row", st!(row));
+        info.insert("column", st!(column));
+        info.insert("total", st!(total));
+        info.insert("file", st!(file));
+        info.insert("full_file", st!(full_file));
+        info.insert("type", filetype(&ext).unwrap_or_else(|| st!("Unknown")));
+        info.insert("modified", st!(modified));
+        info.insert("extension", ext);
+        info
     }
 
     /// Render the document into the correct form
