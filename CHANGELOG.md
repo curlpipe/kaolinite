@@ -10,7 +10,7 @@ This project uses semantic versioning.
 \-
 -->
 
-## [0.3.0] - 30/06/2021
+## [0.3.0] - 06/07/2021
 \+ Added cactus: a editor to demonstrate kaolinite
 
 \+ Added support for accessing the line below the document
