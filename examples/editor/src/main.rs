@@ -1,6 +1,6 @@
 /*
     Editor - A demonstration of the Kaolinite
-    in 255 SLOC (without comments and blanks)
+    in 272 SLOC (without comments and blanks)
     using the Crossterm crate
 
     This editor has unicode and scrolling support, a basic status line, a command line interface
@@ -16,7 +16,7 @@ use crossterm::{
     Result,
 };
 use kaolinite::document::Document;
-use kaolinite::event::Event;
+use kaolinite::event::{Status, Event};
 use kaolinite::st;
 use kaolinite::utils::{filetype, Loc, Size, width};
 use pico_args::Arguments;
@@ -223,17 +223,27 @@ impl Editor {
                 self.doc_mut().move_down().unwrap();
             }
             (KCode::Left, KMod::NONE) => {
-                self.doc_mut().move_left().unwrap();
+                let status = self.doc_mut().move_left();
+                // Wrap cursor if at the start of the row
+                if let Ok(Status::StartOfRow) = status {
+                    self.wrap_left()?;
+                }
             }
             (KCode::Right, KMod::NONE) => {
-                self.doc_mut().move_right().unwrap();
+                let status = self.doc_mut().move_right();
+                // Wrap cursor if at the end of the row
+                if let Ok(Status::EndOfRow) = status {
+                    self.wrap_right()?;
+                }
             }
             (KCode::Home, KMod::NONE) => {
                 self.doc_mut().goto_x(0).unwrap();
             }
             (KCode::End, KMod::NONE) => {
-                let len = self.doc().current_row().unwrap().len();
-                self.doc_mut().goto_x(len).unwrap();
+                if let Ok(row) = self.doc().current_row() {
+                    let len = row.len();
+                    self.doc_mut().goto_x(len).unwrap();
+                }
             }
             // Character insertion
             (KCode::Char(c), KMod::NONE | KMod::SHIFT) => {
@@ -289,6 +299,27 @@ impl Editor {
                 }
             }
             _ => (),
+        }
+        Ok(())
+    }
+
+    fn wrap_left(&mut self) -> Result<()> {
+        // Wrap the cursor around, when moving left
+        if let Ok(Status::None) = self.doc_mut().move_up() {
+            // Cursor was able to be moved up, move to end of row
+            if let Ok(row) = self.doc().current_row() {
+                let len = row.len();
+                self.doc_mut().goto_x(len).unwrap();
+            }
+        }
+        Ok(())
+    }
+
+    fn wrap_right(&mut self) -> Result<()> {
+        // Wrap the cursor around, when moving right
+        if let Ok(Status::None) = self.doc_mut().move_down() {
+            // Cursor was able to be moved down, move to start of row
+            self.doc_mut().goto_x(0).unwrap();
         }
         Ok(())
     }
