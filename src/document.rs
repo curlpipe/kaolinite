@@ -386,6 +386,7 @@ impl Document {
     /// - File type: `type`
     /// - Modifed indicator: `modified`
     /// - File extension: `extension`
+    #[must_use]
     pub fn status_line_info(&self) -> HashMap<&str, String> {
         let row = self.loc().y + 1;
         let total = self.rows.len();
@@ -394,13 +395,13 @@ impl Document {
         let (full_file, file, ext) = if let Some(name) = &self.info.file {
             let f = Path::new(&name)
                 .file_name()
-                .unwrap()
+                .unwrap_or_default()
                 .to_str()
                 .unwrap_or(name)
                 .to_string();
             let e = Path::new(&name)
                 .extension()
-                .unwrap()
+                .unwrap_or_default()
                 .to_str()
                 .unwrap_or("")
                 .to_string();

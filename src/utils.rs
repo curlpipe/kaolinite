@@ -154,6 +154,7 @@ pub fn width_char(c: char, tab: usize) -> usize {
 }
 
 /// This will take text, and align it to the middle of the screen
+#[must_use]
 pub fn align_middle(s: &str, space: usize, tab_width: usize) -> Option<String> {
     let len = width(s, tab_width) / 2;
     let half = space / 2;
@@ -166,6 +167,7 @@ pub fn align_middle(s: &str, space: usize, tab_width: usize) -> Option<String> {
 }
 
 /// This will take text, and align it to the left and right hand sides
+#[must_use]
 pub fn align_sides(lhs: &str, rhs: &str, space: usize, tab_width: usize) -> Option<String> {
     let total = width(lhs, tab_width) + width(rhs, tab_width);
     if total > space {
