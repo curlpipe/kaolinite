@@ -15,6 +15,10 @@ This project uses semantic versioning.
 
 \+ Added status line formatting helper
 
+\+ Added line wrapping to cactus
+
+\~ Simplified cactus code
+
 ## [0.3.1] - 06/07/2021
 \~ Fixed panic issues in next_word_forth
 
