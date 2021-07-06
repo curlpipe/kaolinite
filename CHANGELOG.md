@@ -10,6 +10,9 @@ This project uses semantic versioning.
 \-
 -->
 
+## [0.3.1] - 06/07/2021
+\~ Fixed panic issues in next_word_forth
+
 ## [0.3.0] - 06/07/2021
 \+ Added cactus: a editor to demonstrate kaolinite
 

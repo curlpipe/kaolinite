@@ -74,6 +74,8 @@ fn test_row() {
     assert_eq!(row.next_word_forth(10), 8);
     let row = Row::new("\t\tHel\t\tlo");
     assert_eq!(row.words(), vec![0, 1, 2, 7, 9]);
+    let row = Row::new(" The quick brown fox jumped over the lazy dog!");
+    assert_eq!(row.next_word_forth(0), 1);
     // Character pointers
     let row = Row::new("呢逆反驳船r舱s");
     assert_eq!(row.get_char_ptr(0), 0);

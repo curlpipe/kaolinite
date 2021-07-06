@@ -164,7 +164,7 @@ impl Row {
             }
             last = *bound;
         }
-        unreachable!()
+        *bounds.first().unwrap_or(&0)
     }
 
     /// Find the previous word in this row from the character index
