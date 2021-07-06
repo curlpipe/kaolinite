@@ -27,6 +27,10 @@
 <!--
 - Syntax highlighting
 - Undo / Redo
+- File buffering
+- Formatting tools
+	+ Status line formatting function
+	+ Line number formatting function
 -->
 
 ## How To Use
