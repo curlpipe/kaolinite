@@ -6,6 +6,7 @@ Cactus has:
  - Unicode handling
  - A status line
  - Handy shortcuts (word jumping, deletion, home & end)
+ - Line numbers
  - Filetype detection
  - Multiple file support
  - Command line interface

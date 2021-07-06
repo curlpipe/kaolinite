@@ -1,6 +1,6 @@
 /*
     Editor - A demonstration of the Kaolinite
-    in 258 SLOC (without comments and blanks)
+    in 252 SLOC (without comments and blanks)
     using the Crossterm crate
 
     This editor has unicode and scrolling support, a basic status line, a command line interface
@@ -106,7 +106,7 @@ impl Editor {
         // This will start the editor and run the event loop
         self.start()?;
         // Render initial frame
-        self.render()?;
+        self.render(true)?;
         // Start event loop
         while self.active {
             // Handle key event (ignore other events)
@@ -114,13 +114,13 @@ impl Editor {
                 self.action(key)?
             }
             // Render frame after event
-            self.render()?;
+            self.render(false)?;
         }
-        self.end()?;
+        self.finish()?;
         Ok(())
     }
 
-    fn render(&mut self) -> Result<()> {
+    fn render(&mut self, force: bool) -> Result<()> {
         // Render a frame
         let size = size()?;
         // Update document width (and offset line numbers)
@@ -132,9 +132,10 @@ impl Editor {
         // Render each row in the document
         for y in 0..=size.h {
             // Move to the correct line and clear it
-            execute!(self.stdout, MoveTo(0, y as u16), Clear(ClType::CurrentLine))?;
+            execute!(self.stdout, MoveTo(0, y as u16))?;
             if y == size.h {
                 // Render status line
+                execute!(self.stdout, Clear(ClType::CurrentLine))?;
                 let info = self.doc().status_line_info();
                 // Left and right hand sides of status line
                 let lhs = format!(
@@ -153,10 +154,12 @@ impl Editor {
                 write!(self.stdout, "{}{}{}", STATUS_BG, status_line, RESET_BG)?;
             } else {
                 // Render document rows
+                if !self.doc().modified && !force { continue }
                 // Determine if the line exists, if not, draw a ~
                 let idx = y + self.doc().offset.y;
                 if let Ok(row) = self.doc().row(idx) {
                     let text = row.render(self.doc().offset.x..);
+                    execute!(self.stdout, Clear(ClType::CurrentLine))?;
                     write!(self.stdout, "{} │{}", self.doc().line_number(idx), text)?;
                 } else {
                     write!(self.stdout, "{}~ │", " ".repeat(max.saturating_sub(3)))?;
@@ -174,118 +177,131 @@ impl Editor {
     fn action(&mut self, key: KEvent) -> Result<()> {
         // Function that handles keypress events
         let loc = self.doc().loc();
-        match (key.code, key.modifiers) {
+        let _ = match (key.code, key.modifiers) {
             // Quit the editor
-            (KCode::Char('q'), KMod::CONTROL) => {
-                self.active = false;
-            }
+            (KCode::Char('q'), KMod::CONTROL) => self.quit(),
             // Cursor movement
-            (KCode::Up, KMod::NONE) => {
-                self.doc_mut().move_up().unwrap();
+            (KCode::Up, KMod::NONE) => self.up(),
+            (KCode::Down, KMod::NONE) => self.down(),
+            (KCode::Left, KMod::NONE) => self.left(),
+            (KCode::Right, KMod::NONE) => self.right(),
+            (KCode::Home, KMod::NONE) => self.doc_mut().goto_x(0).unwrap(),
+            (KCode::End, KMod::NONE) => self.end(),
+            // Character insertion
+            (KCode::Char(c), KMod::NONE | KMod::SHIFT) => self.exe(Event::Insert(loc, c)),
+            (KCode::Tab, KMod::NONE | KMod::SHIFT) => self.exe(Event::Insert(loc, '\t')),
+            // Character deletion & row splicing
+            (KCode::Backspace, KMod::NONE) => self.backspace(loc),
+            // Return key
+            (KCode::Enter, KMod::NONE) => self.exe(Event::SplitDown(loc)),
+            // Switching tabs
+            (KCode::Left, KMod::SHIFT) => self.previous_tab(),
+            (KCode::Right, KMod::SHIFT) => self.next_tab(),
+            // Saving
+            (KCode::Char('s'), KMod::CONTROL) => self.doc_mut().save().unwrap(),
+            // Word jumping
+            (KCode::Left, KMod::CONTROL) => self.word_jump_left(loc),
+            (KCode::Right, KMod::CONTROL) => self.word_jump_right(loc),
+            _ => (),
+        };
+        Ok(())
+    }
+
+    fn exe(&mut self, event: Event) {
+        // Execute an event
+        self.new_row();
+        self.doc_mut().execute(event).unwrap();
+    }
+
+    fn quit(&mut self) {
+        // Quit the editor
+        self.active = false;
+    }
+
+    fn end(&mut self) {
+        // Move to the end of the row
+        if let Ok(row) = self.doc().current_row() {
+            let len = row.len();
+            self.doc_mut().goto_x(len).unwrap();
+        }
+    }
+
+    fn next_tab(&mut self) {
+        // Move to the next tab
+        if self.doc_ptr + 1 < self.documents.len() {
+            self.doc_ptr += 1;
+        }
+    }
+
+    fn previous_tab(&mut self) {
+        // Move to the previous tab
+        if self.doc_ptr != 0 {
+            self.doc_ptr -= 1;
+        }
+    }
+
+    fn backspace(&mut self, loc: Loc) {
+        // Handle the backspace key
+        self.new_row();
+        // Determine if delete or splice required
+        if loc.x == 0 {
+            self.exe(Event::SpliceUp(loc));
+        } else {
+            let c = self.doc().row(loc.y).unwrap().text[loc.x - 1];
+            self.exe(Event::Remove(loc, c));
+        }
+    }
+
+    fn word_jump_left(&mut self, loc: Loc) {
+        // Jump to the nearest word to the left
+        if let Ok(row) = self.doc().current_row() {
+            let to = row.next_word_back(loc.x);
+            self.doc_mut().goto_x(to).unwrap();
+        }
+    }
+
+    fn word_jump_right(&mut self, loc: Loc) {
+        // Jump to the nearest word to the right
+        if let Ok(row) = self.doc().current_row() {
+            let to = row.next_word_forth(loc.x);
+            self.doc_mut().goto_x(to).unwrap();
+        }
+    }
+
+    fn up(&mut self) {
+        // Move the cursor up
+        self.doc_mut().move_up().unwrap();
+    }
+
+    fn down(&mut self) {
+        // Move the cursor down
+        self.doc_mut().move_down().unwrap();
+    }
+
+    fn left(&mut self) {
+        // Move the cursor to the left
+        let status = self.doc_mut().move_left();
+        // Wrap cursor if at the start of the row
+        if let Ok(Status::StartOfRow) = status {
+            // Wrap the cursor around, when moving left
+            if let Ok(Status::None) = self.doc_mut().move_up() {
+                // Cursor was able to be moved up, move to end of row
+                self.end();
             }
-            (KCode::Down, KMod::NONE) => {
-                self.doc_mut().move_down().unwrap();
-            }
-            (KCode::Left, KMod::NONE) => {
-                let status = self.doc_mut().move_left();
-                // Wrap cursor if at the start of the row
-                if let Ok(Status::StartOfRow) = status {
-                    self.wrap_left()?;
-                }
-            }
-            (KCode::Right, KMod::NONE) => {
-                let status = self.doc_mut().move_right();
-                // Wrap cursor if at the end of the row
-                if let Ok(Status::EndOfRow) = status {
-                    self.wrap_right()?;
-                }
-            }
-            (KCode::Home, KMod::NONE) => {
+        }
+    }
+
+    fn right(&mut self) {
+        // Move the cursor to the right
+        let status = self.doc_mut().move_right();
+        // Wrap cursor if at the end of the row
+        if let Ok(Status::EndOfRow) = status {
+            // Wrap the cursor around, when moving right
+            if let Ok(Status::None) = self.doc_mut().move_down() {
+                // Cursor was able to be moved down, move to start of row
                 self.doc_mut().goto_x(0).unwrap();
             }
-            (KCode::End, KMod::NONE) => {
-                if let Ok(row) = self.doc().current_row() {
-                    let len = row.len();
-                    self.doc_mut().goto_x(len).unwrap();
-                }
-            }
-            // Character insertion
-            (KCode::Char(c), KMod::NONE | KMod::SHIFT) => {
-                self.new_row();
-                self.doc_mut().execute(Event::Insert(loc, c)).unwrap();
-            }
-            (KCode::Tab, KMod::NONE | KMod::SHIFT) => {
-                self.new_row();
-                self.doc_mut().execute(Event::Insert(loc, '\t')).unwrap();
-            }
-            // Character deletion & row splicing
-            (KCode::Backspace, KMod::NONE) => {
-                self.new_row();
-                // Determine if delete or splice required
-                if loc.x == 0 {
-                    self.doc_mut().execute(Event::SpliceUp(loc)).unwrap();
-                } else {
-                    let c = self.doc().row(loc.y).unwrap().text[loc.x - 1];
-                    self.doc_mut().execute(Event::Remove(loc, c)).unwrap();
-                }
-            }
-            // Return key
-            (KCode::Enter, KMod::NONE) => {
-                self.new_row();
-                self.doc_mut().execute(Event::SplitDown(loc)).unwrap();
-            }
-            // Switching tabs
-            (KCode::Left, KMod::SHIFT) => {
-                if self.doc_ptr != 0 {
-                    self.doc_ptr -= 1;
-                }
-            }
-            (KCode::Right, KMod::SHIFT) => {
-                if self.doc_ptr + 1 < self.documents.len() {
-                    self.doc_ptr += 1;
-                }
-            }
-            // Saving
-            (KCode::Char('s'), KMod::CONTROL) => {
-                self.doc_mut().save().unwrap();
-            }
-            // Word jumping
-            (KCode::Left, KMod::CONTROL) => {
-                if let Ok(row) = self.doc().current_row() {
-                    let to = row.next_word_back(loc.x);
-                    self.doc_mut().goto_x(to).unwrap();
-                }
-            }
-            (KCode::Right, KMod::CONTROL) => {
-                if let Ok(row) = self.doc().current_row() {
-                    let to = row.next_word_forth(loc.x);
-                    self.doc_mut().goto_x(to).unwrap();
-                }
-            }
-            _ => (),
         }
-        Ok(())
-    }
-
-    fn wrap_left(&mut self) -> Result<()> {
-        // Wrap the cursor around, when moving left
-        if let Ok(Status::None) = self.doc_mut().move_up() {
-            // Cursor was able to be moved up, move to end of row
-            if let Ok(row) = self.doc().current_row() {
-                let len = row.len();
-                self.doc_mut().goto_x(len).unwrap();
-            }
-        }
-        Ok(())
-    }
-
-    fn wrap_right(&mut self) -> Result<()> {
-        // Wrap the cursor around, when moving right
-        if let Ok(Status::None) = self.doc_mut().move_down() {
-            // Cursor was able to be moved down, move to start of row
-            self.doc_mut().goto_x(0).unwrap();
-        }
-        Ok(())
     }
 
     pub fn start(&mut self) -> Result<()> {
@@ -297,7 +313,7 @@ impl Editor {
         Ok(())
     }
 
-    pub fn end(&mut self) -> Result<()> {
+    pub fn finish(&mut self) -> Result<()> {
         // This will revert the terminal to the previous settings
         terminal::disable_raw_mode()?;
         // Leave the alternate screen back to the terminal
