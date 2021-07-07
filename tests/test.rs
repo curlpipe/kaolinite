@@ -34,50 +34,50 @@ fn test_line_splitter() {
 #[test]
 fn test_row() {
     // Loading
-    let row = Row::new("");
+    let row = Row::new("", 4);
     assert!(row.is_empty());
-    let mut row = Row::new("aa好b好c");
+    let mut row = Row::new("aa好b好c", 4);
     assert!(!row.is_empty());
     assert_eq!(row.text, vec!['a', 'a', '好', 'b', '好', 'c']);
     assert_eq!(row.indices, vec![0, 1, 2, 4, 5, 7, 8]);
     // Editing
-    row.insert(3, "hao").unwrap();
-    row.insert(2, "ni").unwrap();
-    assert_eq!(row.render_full(), "aani好haob好c");
+    row.insert(3, "hao", 4).unwrap();
+    row.insert(2, "ni", 4).unwrap();
+    assert_eq!(row.render_full(4), "aani好haob好c");
     row.remove(3..7).unwrap();
-    assert_eq!(row.render_full(), "aanob好c");
+    assert_eq!(row.render_full(4), "aanob好c");
     // Bounds checking
-    assert!(row.insert(10000, "nope").is_err());
+    assert!(row.insert(10000, "nope", 4).is_err());
     assert!(row.remove(10000..482228).is_err());
     // Rendering
-    assert_eq!(row.render(5..), "好c");
-    assert_eq!(row.render(6..), " c");
-    assert_eq!(row.render(7..), "c");
-    assert_eq!(row.render(100..), "");
-    let row = Row::new("aa好\tb好c");
-    assert_eq!(row.render_full(), "aa好    b好c");
+    assert_eq!(row.render(5.., 4), "好c");
+    assert_eq!(row.render(6.., 4), " c");
+    assert_eq!(row.render(7.., 4), "c");
+    assert_eq!(row.render(100.., 4), "");
+    let row = Row::new("aa好\tb好c", 4);
+    assert_eq!(row.render_full(4), "aa好    b好c");
     assert_eq!(row.render_raw(), "aa好\tb好c");
     // Words
-    let row = Row::new("The quick brown fox jumped over the lazy dog!");
+    let row = Row::new("The quick brown fox jumped over the lazy dog!", 4);
     assert_eq!(row.words(), vec![0, 4, 10, 16, 20, 27, 32, 36, 41, 45]);
     assert_eq!(row.next_word_back(0), 0);
     assert_eq!(row.next_word_back(29), 27);
     assert_eq!(row.next_word_back(27), 20);
     assert_eq!(row.next_word_back(48), 45);
-    let row = Row::new("\tHello");
+    let row = Row::new("\tHello", 4);
     assert_eq!(row.words(), vec![0, 1, 6]);
-    let row = Row::new("\t\tHel\tlo");
+    let row = Row::new("\t\tHel\tlo", 4);
     assert_eq!(row.words(), vec![0, 1, 2, 6, 8]);
     assert_eq!(row.next_word_forth(0), 1);
     assert_eq!(row.next_word_forth(4), 6);
     assert_eq!(row.next_word_forth(2), 6);
     assert_eq!(row.next_word_forth(10), 8);
-    let row = Row::new("\t\tHel\t\tlo");
+    let row = Row::new("\t\tHel\t\tlo", 4);
     assert_eq!(row.words(), vec![0, 1, 2, 7, 9]);
-    let row = Row::new(" The quick brown fox jumped over the lazy dog!");
+    let row = Row::new(" The quick brown fox jumped over the lazy dog!", 4);
     assert_eq!(row.next_word_forth(0), 1);
     // Character pointers
-    let row = Row::new("呢逆反驳船r舱s");
+    let row = Row::new("呢逆反驳船r舱s", 4);
     assert_eq!(row.get_char_ptr(0), 0);
     assert_eq!(row.get_char_ptr(2), 1);
     assert_eq!(row.get_char_ptr(4), 2);
@@ -87,7 +87,7 @@ fn test_row() {
     assert_eq!(row.get_char_ptr(11), 6);
     assert_eq!(row.get_char_ptr(13), 7);
     assert_eq!(row.get_char_ptr(14), 8);
-    let row = Row::new("sr饿t肚子rsf萨t订");
+    let row = Row::new("sr饿t肚子rsf萨t订", 4);
     assert_eq!(row.get_char_ptr(0), 0);
     assert_eq!(row.get_char_ptr(1), 1);
     assert_eq!(row.get_char_ptr(2), 2);
@@ -102,7 +102,7 @@ fn test_row() {
     assert_eq!(row.get_char_ptr(15), 11);
     assert_eq!(row.get_char_ptr(17), 12);
     // Splitting
-    let row = Row::new("sr饿t肚子rsf萨t订");
+    let row = Row::new("sr饿t肚子rsf萨t订", 4);
     assert_eq!(
         row.split(0).unwrap(),
         (
@@ -110,31 +110,34 @@ fn test_row() {
                 text: vec![],
                 indices: vec![0],
                 modified: true,
-                info: std::ptr::null_mut()
+                #[cfg(feature = "syntax_highlighting")]
+                tokens: vec![],
+                #[cfg(feature = "syntax_highlighting")]
+                needs_rerender: true,
             },
-            Row::new("sr饿t肚子rsf萨t订")
+            Row::new("sr饿t肚子rsf萨t订", 4)
         ),
     );
-    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订", 4);
     dummy.modified = true;
-    assert_eq!(row.split(12).unwrap(), (dummy, Row::new("")),);
-    let mut dummy = Row::new("sr饿t");
+    assert_eq!(row.split(12).unwrap(), (dummy, Row::new("", 4)),);
+    let mut dummy = Row::new("sr饿t", 4);
     dummy.modified = true;
-    assert_eq!(row.split(4).unwrap(), (dummy, Row::new("肚子rsf萨t订")),);
+    assert_eq!(row.split(4).unwrap(), (dummy, Row::new("肚子rsf萨t订", 4)),);
     // Splicing
-    let mut left = Row::new("sr饿t");
-    let right = Row::new("肚子rsf萨t订");
-    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    let mut left = Row::new("sr饿t", 4);
+    let right = Row::new("肚子rsf萨t订", 4);
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订", 4);
     dummy.modified = true;
     assert_eq!(left.splice(right), dummy);
-    let mut left = Row::new("");
-    let right = Row::new("sr饿t肚子rsf萨t订");
-    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    let mut left = Row::new("", 4);
+    let right = Row::new("sr饿t肚子rsf萨t订", 4);
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订", 4);
     dummy.modified = true;
     assert_eq!(left.splice(right), dummy);
-    let mut left = Row::new("sr饿t肚子rsf萨t订");
-    let right = Row::new("");
-    let mut dummy = Row::new("sr饿t肚子rsf萨t订");
+    let mut left = Row::new("sr饿t肚子rsf萨t订", 4);
+    let right = Row::new("", 4);
+    let mut dummy = Row::new("sr饿t肚子rsf萨t订", 4);
     dummy.modified = true;
     assert_eq!(left.splice(right), dummy);
 }
@@ -160,7 +163,10 @@ fn test_document() {
             text: vec![],
             indices: vec![0],
             modified: false,
-            info: &mut doc.info
+            #[cfg(feature = "syntax_highlighting")]
+            tokens: vec![],
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         }]
     );
     doc.open("examples/test2.txt").expect("File not found");
@@ -168,26 +174,26 @@ fn test_document() {
     assert_eq!(
         doc.rows,
         vec![
-            Row::new("My").link(&mut doc.info),
-            Row::new("new好").link(&mut doc.info),
-            Row::new("document").link(&mut doc.info),
-            Row::new("好").link(&mut doc.info),
+            Row::new("My", doc.info.tab_width),
+            Row::new("new好", doc.info.tab_width),
+            Row::new("document", doc.info.tab_width),
+            Row::new("好", doc.info.tab_width),
         ]
     );
     // Test row retrieval
     assert_eq!(
         doc.row(1).unwrap().clone(),
-        Row::new("new好").link(&mut doc.info)
+        Row::new("new好", doc.info.tab_width)
     );
     doc.cursor.y = 1;
     assert_eq!(
         doc.current_row().unwrap().clone(),
-        Row::new("new好").link(&mut doc.info)
+        Row::new("new好", doc.info.tab_width)
     );
     assert_eq!(doc.current_row().unwrap().len(), 4);
     assert_eq!(doc.current_row().unwrap().width(), 5);
     // Test editing
-    doc.row_mut(0).unwrap().insert(1, ",").unwrap();
+    doc.row_mut(0).unwrap().insert(1, ",", 4).unwrap();
     doc.row_mut(0).unwrap().remove(2..3).unwrap();
     assert!(!doc.modified);
     assert_eq!(
@@ -197,11 +203,14 @@ fn test_document() {
                 text: vec!['M', ','],
                 indices: vec![0, 1, 2],
                 modified: true,
-                info: &mut doc.info
+                #[cfg(feature = "syntax_highlighting")]
+                needs_rerender: true,
+                #[cfg(feature = "syntax_highlighting")]
+                tokens: vec![],
             },
-            Row::new("new好").link(&mut doc.info),
-            Row::new("document").link(&mut doc.info),
-            Row::new("好").link(&mut doc.info),
+            Row::new("new好", doc.info.tab_width),
+            Row::new("document", doc.info.tab_width),
+            Row::new("好", doc.info.tab_width),
         ]
     );
     // Test rendering
@@ -274,6 +283,10 @@ fn test_document() {
         "type" => st!("Unknown"), "modified" => st!("[+]"), "extension" => st!(""),
     };
     assert_eq!(info, dummy);
+    // Test full rendering
+    doc.open("examples/test8.txt").unwrap();
+    assert_eq!(doc.render_full(), "    tab\nnotab\n");
+    assert_eq!(doc.render(), "\ttab\nnotab\n");
 }
 
 #[test]
@@ -494,7 +507,10 @@ fn test_save() {
             text: vec!['h', 'e', 'l', 'l', 'o'],
             indices: vec![0, 1, 2, 3, 4, 5],
             modified: false,
-            info: &mut doc.info,
+            #[cfg(feature = "syntax_highlighting")]
+            tokens: vec![],
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         }]
     );
     doc.execute(Event::Remove((2, 0).into(), 'e')).unwrap();
@@ -504,7 +520,10 @@ fn test_save() {
             text: vec!['h', 'l', 'l', 'o'],
             indices: vec![0, 1, 2, 3, 4],
             modified: true,
-            info: &mut doc.info,
+            #[cfg(feature = "syntax_highlighting")]
+            tokens: vec![],
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         }]
     );
     assert!(doc.modified);

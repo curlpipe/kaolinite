@@ -9,6 +9,14 @@ This project uses semantic versioning.
 \~
 \-
 -->
+## [0.4.0] - 08/07/2021
+\+ Added syntax highlighting helper feature
+
+\+ Added syntax highlighting using `synoptic` to cactus.
+
+\+ Added `render_full` method to render the entire document in display form
+
+\~ Changed API to remove unsafe code and pointer hell
 
 ## [0.3.2] - 06/07/2021
 \+ Added alignment helper

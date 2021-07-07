@@ -17,7 +17,7 @@ use std::fs;
 use std::path::Path;
 
 /// A struct that stores information about a file
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FileInfo {
     /// The file name of the document
     pub file: Option<String>,
@@ -57,6 +57,12 @@ pub struct Document {
     pub cursor: Loc,
     /// Stores information about scrolling
     pub offset: Loc,
+    /// Render cache space for optimisation purposes
+    #[cfg(feature = "syntax_highlighting")]
+    pub render: String,
+    /// Toggle that determines if the document requires rerendering
+    #[cfg(feature = "syntax_highlighting")]
+    pub needs_rerender: bool,
 }
 
 impl Document {
@@ -78,6 +84,10 @@ impl Document {
             offset: Loc::default(),
             size: size.into(),
             char_ptr: 0,
+            #[cfg(feature = "syntax_highlighting")]
+            render: st!(""),
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         }
     }
 
@@ -148,10 +158,11 @@ impl Document {
     /// Will return `Err` if the event tried to modifiy data outside the scope of the
     /// document.
     pub fn execute(&mut self, event: Event) -> Result<Status> {
+        let tab_width = self.info.tab_width;
         match event {
             Event::Insert(loc, ch) => {
                 self.goto(loc)?;
-                self.row_mut(loc.y)?.insert(loc.x, ch)?;
+                self.row_mut(loc.y)?.insert(loc.x, ch, tab_width)?;
                 self.modified = true;
                 self.move_right()
             }
@@ -166,7 +177,7 @@ impl Document {
                 Ok(Status::None)
             }
             Event::InsertRow(loc, st) => {
-                self.rows.insert(loc, Row::new(st).link(&mut self.info));
+                self.rows.insert(loc, Row::new(st, self.info.tab_width));
                 self.modified = true;
                 self.goto_y(loc)?;
                 Ok(Status::None)
@@ -433,6 +444,18 @@ impl Document {
             + line_ending
     }
 
+    /// Render the document into the correct form
+    #[must_use]
+    pub fn render_full(&self) -> String {
+        let line_ending = if self.info.is_dos { "\r\n" } else { "\n" };
+        let mut result = st!("");
+        for r in &self.rows {
+            result.push_str(&r.render_full(self.info.tab_width));
+            result.push_str(line_ending);
+        }
+        result
+    }
+
     /// Shift the cursor back to the nearest grapheme boundary
     fn snap_grapheme(&mut self) -> Result<()> {
         // Collect information
@@ -457,11 +480,12 @@ impl Document {
     }
 
     /// Take raw text and convert it into Row structs
-    fn raw_to_rows(&mut self, text: &str) -> Vec<Row> {
+    #[must_use]
+    pub fn raw_to_rows(&self, text: &str) -> Vec<Row> {
         let text = regex!("(\\r\\n|\\n)$").replace(text, "").to_string();
         let rows: Vec<&str> = regex!("(\\r\\n|\\n)").split(&text).collect();
         rows.iter()
-            .map(|s| Row::new(*s).link(&mut self.info))
+            .map(|s| Row::new(*s, self.info.tab_width))
             .collect()
     }
 

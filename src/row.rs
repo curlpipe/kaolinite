@@ -4,10 +4,11 @@
 //! require some row-specific information such as how it looks when rendered,
 //! or where the word boundaries in it are.
 
-use crate::document::FileInfo;
 use crate::event::{Error, Result, Status};
 use crate::st;
 use crate::utils::{raw_indices, width, width_char, BoundedRange};
+#[cfg(feature = "syntax_highlighting")]
+use synoptic::Token;
 
 /// A struct that contains all the basic tools necessary to manage rows in a document
 #[derive(Debug, PartialEq, Clone)]
@@ -19,58 +20,60 @@ pub struct Row {
     /// A tool for determining if the row has been edited
     /// ```
     /// use kaolinite::row::Row;
-    /// let mut row = Row::new("Hello");
+    /// let tab_width = 4;
+    /// let mut row = Row::new("Hello", tab_width);
     /// assert_eq!(row.modified, false);
-    /// row.insert(5, ", world!");
+    /// row.insert(5, ", world!", tab_width);
     /// assert_eq!(row.modified, true);
     /// row.modified = false;
     /// assert_eq!(row.modified, false);
     /// ```
     /// This is ideal for optimisation
     pub modified: bool,
-    /// Holds a reference to file information
-    pub info: *mut FileInfo,
+    /// Tokens for this row
+    #[cfg(feature = "syntax_highlighting")]
+    pub tokens: Vec<Token>,
+    #[cfg(feature = "syntax_highlighting")]
+    pub needs_rerender: bool,
 }
 
 impl Row {
     /// Create a new row from raw text
     #[cfg(not(tarpaulin_include))]
-    pub fn new<S: Into<String>>(raw: S) -> Self {
+    pub fn new<S: Into<String>>(raw: S, tab_width: usize) -> Self {
         let raw = raw.into();
         let text: Vec<char> = raw.chars().collect();
         Self {
-            indices: Row::raw_to_indices(&text, 4),
+            indices: Row::raw_to_indices(&text, tab_width),
             text,
             modified: false,
-            info: std::ptr::null_mut(),
+            #[cfg(feature = "syntax_highlighting")]
+            tokens: vec![],
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         }
-    }
-
-    /// This method provides a neat way to link a row to a file info
-    /// You usually don't need to use this method yourself
-    /// It is used by Document to link it's [`FileInfo`](crate::document::FileInfo) struct
-    /// to each Row for configuration purposes
-    pub fn link(mut self, link: *mut FileInfo) -> Self {
-        self.info = link;
-        let tabs = self.get_tab_width();
-        if tabs != 4 {
-            self.indices = Row::raw_to_indices(&self.text, tabs);
-        }
-        self
     }
 
     /// Insert text at a position
     /// # Errors
     /// Will return `Err` if `start` is out of range of the row
-    pub fn insert<S: Into<String>>(&mut self, start: usize, text: S) -> Result<Status> {
+    pub fn insert<S: Into<String>>(
+        &mut self,
+        start: usize,
+        text: S,
+        tabs: usize,
+    ) -> Result<Status> {
         if start > self.width() {
             return Err(Error::OutOfRange);
         }
         let text = text.into();
         self.text.splice(start..start, text.chars());
-        let tabs = self.get_tab_width();
         self.indices = Row::raw_to_indices(&self.text, tabs);
         self.modified = true;
+        #[cfg(feature = "syntax_highlighting")]
+        {
+            self.needs_rerender = true;
+        }
         Ok(Status::None)
     }
 
@@ -96,6 +99,10 @@ impl Row {
             .skip(start)
             .for_each(|i| *i -= shift);
         self.modified = true;
+        #[cfg(feature = "syntax_highlighting")]
+        {
+            self.needs_rerender = true;
+        }
         Ok(Status::None)
     }
 
@@ -106,14 +113,20 @@ impl Row {
         let left = Row {
             text: self.text.get(..idx).ok_or(Error::OutOfRange)?.to_vec(),
             indices: self.indices.get(..=idx).ok_or(Error::OutOfRange)?.to_vec(),
-            info: self.info,
             modified: true,
+            #[cfg(feature = "syntax_highlighting")]
+            tokens: vec![],
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         };
         let mut right = Row {
             text: self.text.get(idx..).ok_or(Error::OutOfRange)?.to_vec(),
             indices: self.indices.get(idx..).ok_or(Error::OutOfRange)?.to_vec(),
-            info: self.info,
             modified: false,
+            #[cfg(feature = "syntax_highlighting")]
+            tokens: vec![],
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         };
         // Shift down
         let shift = *right.indices.first().unwrap_or(&0);
@@ -134,7 +147,10 @@ impl Row {
             indices,
             text,
             modified: true,
-            info: self.info,
+            #[cfg(feature = "syntax_highlighting")]
+            tokens: vec![],
+            #[cfg(feature = "syntax_highlighting")]
+            needs_rerender: true,
         }
     }
 
@@ -198,32 +214,30 @@ impl Row {
     /// This also handles double width characters by inserting whitespace when half
     /// of the character is off the screen
     #[must_use]
-    pub fn render(&self, range: std::ops::RangeFrom<usize>) -> String {
+    pub fn render(&self, range: std::ops::RangeFrom<usize>, tabs: usize) -> String {
         let mut start = range.start;
         // Render the row
         let text = self.render_raw();
-        let tab_width = self.get_tab_width();
         // Return an empty string if start is out of range
-        if start >= width(&text, tab_width) {
+        if start >= width(&text, tabs) {
             return st!("");
         }
         // Obtain the character indices
-        let ind = raw_indices(&text, &self.indices, tab_width);
+        let ind = raw_indices(&text, &self.indices, tabs);
         // Shift the cut point forward until on a character boundary
         let space = !ind.contains_key(&start);
         while !ind.contains_key(&start) {
             start += 1;
         }
         // Perform cut and format
-        let text = text.replace("\t", &" ".repeat(tab_width));
+        let text = text.replace("\t", &" ".repeat(tabs));
         format!("{}{}", if space { " " } else { "" }, &text[ind[&start]..])
     }
 
     /// Render the entire row, with tabs converted into spaces
     #[must_use]
-    pub fn render_full(&self) -> String {
+    pub fn render_full(&self, tabs: usize) -> String {
         // Retrieve tab width
-        let tabs = self.get_tab_width();
         self.text.iter().fold(st!(""), |a, x| {
             format!(
                 "{}{}",
@@ -283,15 +297,5 @@ impl Row {
                 Some(*a)
             })
             .collect()
-    }
-
-    /// Retrieve the tab width from the document info
-    #[must_use]
-    pub fn get_tab_width(&self) -> usize {
-        if self.info.is_null() {
-            4
-        } else {
-            unsafe { &*self.info }.tab_width
-        }
     }
 }

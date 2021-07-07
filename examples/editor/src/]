@@ -1,12 +1,11 @@
 /*
     Editor - A demonstration of the Kaolinite
-    in 324 SLOC (without comments and blanks)
-    Uses the Crossterm crate for rendering
-    and the Synpotic crate for efficeint syntax highlighting
+    in 400 SLOC (without comments and blanks)
+    using the Crossterm crate
 
     This editor has unicode and scrolling support, a basic status line, a command line interface
     handles editing multiple files, saving files, filetype detection, line numbers and word jumping,
-    line wrapping, and syntax highlighting.
+    line wrapping
 */
 
 use crossterm::{
@@ -25,42 +24,21 @@ use pico_args::Arguments;
 use std::io::{stdout, Error, ErrorKind, Write};
 use synoptic::{trim, Highlighter, Token};
 
-// Syntax highlighting regular expressions & keywords
-// This section looks a bit complicated, but they're just regular expressions
-const KEYWORDS: [&str; 63] = [
+const KEYWORDS: [&str; 76] = [
     "as", "break", "const", "continue", "crate", "else", "enum", "extern", "fn", "for", "if",
     "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self",
-    "static", "struct", "trait", "type", "unsafe", "use", "where", "while", "async", "await",
-    "dyn", "box", "typeof", "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64",
-    "i128", "isize", "f32", "f64", "String", "Vec", "str", "Some", "bool", "None", "Box", "Result",
-    "Option", "Ok", "Err", "Self", "std",
+    "static", "struct", "super", "trait", "type", "unsafe", "use", "where", "while", "async",
+    "await", "dyn", "abstract", "become", "box", "do", "final", "macro", "override", "priv",
+    "typeof", "unsized", "virtual", "yield", "try", "'static", "u8", "u16", "u32", "u64", "u128",
+    "usize", "i8", "i16", "i32", "i64", "i128", "isize", "f32", "f64", "String", "Vec", "str",
+    "Some", "bool", "None", "Box", "Result", "Option", "Ok", "Err", "Self", "std",
 ];
-const STRING: &str = "(?ms)\"(?:[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"";
-const COMMENT: [&str; 2] = ["(?m)(//.*)$", r"(?ms)(/\*.*?\*/)"];
-const MACRO: &str = r"\b([a-z_][a-zA-Z0-9_]*!)";
-const REFERENCE: [&str; 4] = ["(&)", "&mut", "&self", "&str"];
-const FUNCTION: [&str; 3] = [
-    r"([a-z_][A-Za-z0-9_]*)\s*\(",
-    r"\.([a-z_][A-Za-z0-9_]*)\s*\(",
-    r"fn\s+([a-z_][A-Za-z0-9_]*)\s*\(",
-];
-const DIGIT: &str = r"\b(\d+.\d+|\d+)";
-const NAMESPACE: &str = r"([A-Za-z0-9_]*)::";
-const STRUCT: [&str; 3] = [
-    r"(?:trait|enum|struct|impl)\\s+([A-Z][A-Za-z0-9_]*)\\s*",
-    r"([A-Z][A-Za-z0-9_]*)\s*\(",
-    r"impl(?:<.*?>|)\\s+([A-Z][A-Za-z0-9_]*)",
-];
-
-// Status line background colours
 const STATUS_BG: Bg = Bg(Color::Rgb {
     r: 31,
     g: 92,
     b: 62,
 });
 const RESET_BG: Bg = Bg(Color::Reset);
-
-// Command line interface usage
 const USAGE: &str = "\
 Editor: A basic command line text editor that demonstrates the kaolinite crate.
 
@@ -81,26 +59,6 @@ fn size() -> Result<Size> {
         w: w as usize,
         h: h as usize - 1,
     })
-}
-
-fn syntax_lookup(token: &str) -> Fg {
-    // Look up the syntax highlighting colour to use
-    match token {
-        "keyword" => Fg(Color::DarkBlue),
-        "string" => Fg(Color::Green),
-        "macro" => Fg(Color::Magenta),
-        "reference" => Fg(Color::Red),
-        "struct" => Fg(Color::Cyan),
-        "function" => Fg(Color::Cyan),
-        "digit" => Fg(Color::DarkMagenta),
-        "namespace" => Fg(Color::Cyan),
-        "comment" => Fg(Color::Rgb {
-            r: 80,
-            g: 80,
-            b: 80,
-        }),
-        _ => Fg(Color::White),
-    }
 }
 
 struct Editor {
@@ -133,6 +91,9 @@ impl Editor {
         while let Some(doc) = args.subcommand().unwrap_or_default() {
             // Create a document
             let mut document = Document::new(size);
+            document.info.tab_width = 2;
+            // Trick to get document to render the first time
+            document.modified = true;
             // Open the file, returning an error if one of them isn't found
             document.open(&doc).ok().ok_or_else(|| {
                 Error::new(ErrorKind::NotFound, format!("Failed to open file {}", doc))
@@ -149,18 +110,47 @@ impl Editor {
         }
         // Implement rust syntax highlighting
         let mut highlighter = Highlighter::new();
-        // Link up all the regular expressions and keywords into the highlighter
-        KEYWORDS
-            .iter()
-            .for_each(|kw| highlighter.add(&format!(r"\b{}\b", kw), "keyword").unwrap());
-        highlighter.add(STRING, "string").unwrap();
-        highlighter.add(MACRO, "macro").unwrap();
-        highlighter.add(DIGIT, "digit").unwrap();
-        highlighter.add(NAMESPACE, "namespace").unwrap();
-        highlighter.join(&COMMENT, "comment").unwrap();
-        highlighter.join(&REFERENCE, "reference").unwrap();
-        highlighter.join(&FUNCTION, "function").unwrap();
-        highlighter.join(&STRUCT, "struct").unwrap();
+        for kw in KEYWORDS {
+            highlighter
+                .add(&format!("\\b{}\\b", kw), "keyword")
+                .unwrap();
+        }
+        // This section looks really scary. They're just complicated regular expressions.
+        // You can write your own regular expressions if you wish, that aren't as complicated.
+        highlighter
+            .add("(?ms)\"(?:[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"", "string")
+            .unwrap();
+        highlighter.add("(?m)(//.*)$", "comment").unwrap();
+        highlighter.add("(?ms)(/\\*.*?\\*/)", "comment").unwrap();
+        highlighter
+            .add("\\b([a-z_][a-zA-Z0-9_]*!)", "macro")
+            .unwrap();
+        highlighter
+            .join(&["(&)", "&mut", "&self", "&str"], "reference")
+            .unwrap();
+        highlighter
+            .add("fn\\s+([a-z_][A-Za-z0-9_]*)\\s*\\(", "function")
+            .unwrap();
+        highlighter
+            .add(r"\.([a-z_][A-Za-z0-9_]*)\s*\(", "function")
+            .unwrap();
+        highlighter
+            .add(r"([a-z_][A-Za-z0-9_]*)\s*\(", "function")
+            .unwrap();
+        highlighter.add("\\b(\\d+.\\d+|\\d+)", "digits").unwrap();
+        highlighter.add(r"([A-Za-z0-9_]*)::", "namespaces").unwrap();
+        highlighter
+            .add(
+                "(?:trait|enum|struct|impl)\\s+([A-Z][A-Za-z0-9_]*)\\s*",
+                "structs",
+            )
+            .unwrap();
+        highlighter
+            .add(r"([A-Z][A-Za-z0-9_]*)\s*\(", "structs")
+            .unwrap();
+        highlighter
+            .add("impl(?:<.*?>|)\\s+([A-Z][A-Za-z0-9_]*)", "structs")
+            .unwrap();
         // Return a new editor struct with a stdout ready to go
         Ok(Self {
             stdout: stdout(),
@@ -197,12 +187,12 @@ impl Editor {
         self.doc_mut().size.h = size.h;
         // Hide the cursor
         write!(self.stdout, "{}", Hide)?;
-        // Render the entire document (if needed)
-        // This is later used in the `synoptic` for syntax highlighting
-        if self.doc().needs_rerender {
-            self.doc_mut().render = self.doc().render_full();
-            self.doc_mut().needs_rerender = false;
+        // Render the entire document
+        let doc = self.doc_mut();
+        if doc.modified {
+
         }
+        let render = self.doc().render_full();
         // Render each row in the document
         for y in 0..=size.h {
             // Move to the correct line and clear it
@@ -231,11 +221,11 @@ impl Editor {
                 let idx = y + self.doc().offset.y;
                 if idx < self.doc().rows.len() {
                     // Run the syntax highlighter
-                    if self.doc().row(idx).unwrap().needs_rerender {
+                    if self.doc().row(idx).unwrap().modified {
                         // Rerender if row has been modified
-                        let tokens = self.highlighter.run_line(&self.doc().render, idx).unwrap();
+                        let tokens = self.highlighter.run_line(&render, idx).unwrap();
                         self.doc_mut().row_mut(idx).unwrap().tokens = tokens;
-                        self.doc_mut().row_mut(idx).unwrap().needs_rerender = false;
+                        self.doc_mut().row_mut(idx).unwrap().modified = false;
                     }
                     // Collect tokens and trim them to fit
                     let tokens = &self.doc().row(idx).unwrap().tokens;
@@ -244,15 +234,30 @@ impl Editor {
                     let mut text = st!("");
                     for tok in tokens {
                         match tok {
-                            // Start of a token
-                            Token::Start(t) => text.push_str(&syntax_lookup(&t).to_string()),
-                            // Text tokens
+                            Token::Start(t) => text.push_str(
+                                &match t.as_str() {
+                                    "keyword" => Fg(Color::DarkBlue),
+                                    "string" => Fg(Color::Green),
+                                    "macro" => Fg(Color::Magenta),
+                                    "reference" => Fg(Color::Red),
+                                    "structs" => Fg(Color::Cyan),
+                                    "function" => Fg(Color::Cyan),
+                                    "digits" => Fg(Color::DarkMagenta),
+                                    "namespaces" => Fg(Color::Cyan),
+                                    "comment" => Fg(Color::Rgb {
+                                        r: 80,
+                                        g: 80,
+                                        b: 80,
+                                    }),
+                                    _ => Fg(Color::White),
+                                }
+                                .to_string(),
+                            ),
                             Token::Text(s) => text.push_str(&s),
-                            // End of text tokens
                             Token::End(_) => text.push_str(&Fg(Color::Reset).to_string()),
                         }
                     }
-                    // Render the newly created row
+                    // Render
                     write!(self.stdout, "{} │{}", self.doc().line_number(idx), text)?;
                 } else {
                     write!(self.stdout, "{}~ │", " ".repeat(max.saturating_sub(3)))?;

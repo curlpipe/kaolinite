@@ -55,6 +55,7 @@ dependencies = [
  "crossterm",
  "kaolinite",
  "pico-args",
+ "synoptic",
 ]
 
 [[package]]
@@ -68,10 +69,11 @@ dependencies = [
 
 [[package]]
 name = "kaolinite"
-version = "0.3.2"
+version = "0.4.0"
 dependencies = [
  "once_cell",
  "regex",
+ "synoptic",
  "unicode-width",
 ]
 
@@ -240,6 +242,16 @@ name = "smallvec"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
+
+[[package]]
+name = "synoptic"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a6133c176954ac1f9defce772e089860ad637e4f36b46dc86d1adb7640bda6f"
+dependencies = [
+ "regex",
+ "unicode-width",
+]
 
 [[package]]
 name = "unicode-width"
