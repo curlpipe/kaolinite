@@ -9,6 +9,11 @@ This project uses semantic versioning.
 \~
 \-
 -->
+## [0.4.1] - 08/07/2021
+\~ Updated documentation
+
+\- Removed heavy logo files
+
 ## [0.4.0] - 08/07/2021
 \+ Added syntax highlighting helper feature
 
