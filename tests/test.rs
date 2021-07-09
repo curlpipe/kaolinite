@@ -110,9 +110,7 @@ fn test_row() {
                 text: vec![],
                 indices: vec![0],
                 modified: true,
-                #[cfg(feature = "syntax_highlighting")]
                 tokens: vec![],
-                #[cfg(feature = "syntax_highlighting")]
                 needs_rerender: true,
             },
             Row::new("sr饿t肚子rsf萨t订", 4)
@@ -163,9 +161,7 @@ fn test_document() {
             text: vec![],
             indices: vec![0],
             modified: false,
-            #[cfg(feature = "syntax_highlighting")]
             tokens: vec![],
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
         }]
     );
@@ -203,9 +199,7 @@ fn test_document() {
                 text: vec!['M', ','],
                 indices: vec![0, 1, 2],
                 modified: true,
-                #[cfg(feature = "syntax_highlighting")]
                 needs_rerender: true,
-                #[cfg(feature = "syntax_highlighting")]
                 tokens: vec![],
             },
             Row::new("new好", doc.info.tab_width),
@@ -507,9 +501,7 @@ fn test_save() {
             text: vec!['h', 'e', 'l', 'l', 'o'],
             indices: vec![0, 1, 2, 3, 4, 5],
             modified: false,
-            #[cfg(feature = "syntax_highlighting")]
             tokens: vec![],
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
         }]
     );
@@ -520,9 +512,7 @@ fn test_save() {
             text: vec!['h', 'l', 'l', 'o'],
             indices: vec![0, 1, 2, 3, 4],
             modified: true,
-            #[cfg(feature = "syntax_highlighting")]
             tokens: vec![],
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
         }]
     );
@@ -610,7 +600,7 @@ fn test_execution() {
     assert_eq!(doc.loc(), Loc { x: 2, y: 0 });
     doc.goto((0, 0)).unwrap();
     assert_eq!(
-        doc.execute(Event::SpliceUp((0, 1).into())).unwrap(),
+        doc.execute(Event::SpliceUp((2, 0).into())).unwrap(),
         Status::None
     );
     assert_eq!(doc.render(), st!("qx:!\n"));
@@ -628,7 +618,7 @@ fn test_execution() {
         Status::None
     );
     assert_eq!(doc.render(), st!("qx\n"));
-    assert_eq!(doc.loc(), Loc { x: 0, y: 0 });
+    assert_eq!(doc.loc(), Loc { x: 0, y: 1 });
     doc.goto((0, 0)).unwrap();
     assert_eq!(
         doc.execute(Event::Remove((1, 0).into(), 'q')).unwrap(),
@@ -639,10 +629,6 @@ fn test_execution() {
     assert_eq!(
         doc.execute(Event::Remove((0, 0).into(), ' ')).unwrap(),
         Status::StartOfRow
-    );
-    assert_eq!(
-        doc.execute(Event::SpliceUp((0, 0).into())).unwrap(),
-        Status::StartOfDocument
     );
     assert_eq!(doc.render(), st!("x\n"));
     assert_eq!(doc.loc(), Loc { x: 0, y: 0 });
@@ -681,4 +667,116 @@ fn test_alignment() {
     );
     assert_eq!(align_sides("hel\tl", "o!", 10, 4).unwrap(), st!("hel\tlo!"));
     assert!(align_sides(" hel\tl", "o! ", 10, 4).is_none());
+}
+
+#[test]
+fn test_event_stack() {
+    let mut events = EditStack::default();
+    events.exe(Event::Insert(Loc { x: 0, y: 0 }, 'e'));
+    events.exe(Event::Insert(Loc { x: 1, y: 0 }, 'g'));
+    events.exe(Event::Insert(Loc { x: 2, y: 0 }, 'g'));
+    assert_eq!(
+        events.patch,
+        vec![
+            Event::Insert(Loc { x: 0, y: 0 }, 'e'),
+            Event::Insert(Loc { x: 1, y: 0 }, 'g'),
+            Event::Insert(Loc { x: 2, y: 0 }, 'g'),
+        ]
+    );
+    events.commit();
+    assert!(events.patch.is_empty());
+    assert_eq!(
+        events.done,
+        vec![vec![
+            Event::Insert(Loc { x: 0, y: 0 }, 'e'),
+            Event::Insert(Loc { x: 1, y: 0 }, 'g'),
+            Event::Insert(Loc { x: 2, y: 0 }, 'g'),
+        ],]
+    );
+    assert_eq!(
+        events.undo().unwrap(),
+        &vec![
+            Event::Insert(Loc { x: 2, y: 0 }, 'g'),
+            Event::Insert(Loc { x: 1, y: 0 }, 'g'),
+            Event::Insert(Loc { x: 0, y: 0 }, 'e'),
+        ]
+    );
+    assert_eq!(
+        events.redo().unwrap(),
+        &vec![
+            Event::Insert(Loc { x: 0, y: 0 }, 'e'),
+            Event::Insert(Loc { x: 1, y: 0 }, 'g'),
+            Event::Insert(Loc { x: 2, y: 0 }, 'g'),
+        ]
+    );
+}
+
+#[test]
+fn test_undoredo() {
+    let mut doc = Document::new((10, 3));
+    doc.open("examples/test4.txt").unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\n句句stdt实话t拦trs截\n")
+    );
+    // Insert
+    doc.execute(Event::Insert((0, 1).into(), 'd')).unwrap();
+    doc.execute(Event::Insert((1, 1).into(), 'i')).unwrap();
+    doc.execute(Event::Insert((2, 1).into(), 'e')).unwrap();
+    doc.event_stack.commit();
+    doc.execute(Event::Insert((3, 1).into(), ' ')).unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\ndie 句句stdt实话t拦trs截\n")
+    );
+    // Remove
+    doc.execute(Event::Remove((4, 1).into(), ' ')).unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\ndie句句stdt实话t拦trs截\n")
+    );
+    // Insert and delete row
+    doc.execute(Event::InsertRow(2, st!("hi"))).unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\ndie句句stdt实话t拦trs截\nhi\n")
+    );
+    doc.execute(Event::RemoveRow(1, st!("die句句stdt实话t拦trs截")))
+        .unwrap();
+    assert_eq!(doc.render(), st!("船r舱s和蔼t教案汉代t\nhi\n"));
+    // Splice up
+    doc.execute(Event::SpliceUp((12, 0).into())).unwrap();
+    assert_eq!(doc.render(), st!("船r舱s和蔼t教案汉代thi\n"));
+    // Split down
+    doc.execute(Event::SplitDown((3, 0).into())).unwrap();
+    assert_eq!(doc.render(), st!("船r舱\ns和蔼t教案汉代thi\n"));
+
+    doc.back(Event::SplitDown((3, 0).into())).unwrap();
+    assert_eq!(doc.render(), st!("船r舱s和蔼t教案汉代thi\n"));
+    doc.back(Event::SpliceUp((12, 0).into())).unwrap();
+    assert_eq!(doc.render(), st!("船r舱s和蔼t教案汉代t\nhi\n"));
+    doc.back(Event::RemoveRow(1, st!("die句句stdt实话t拦trs截")))
+        .unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\ndie句句stdt实话t拦trs截\nhi\n")
+    );
+    doc.back(Event::InsertRow(2, st!("hi"))).unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\ndie句句stdt实话t拦trs截\n")
+    );
+    doc.back(Event::Remove((4, 1).into(), ' ')).unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\ndie 句句stdt实话t拦trs截\n")
+    );
+    doc.back(Event::Insert((3, 1).into(), ' ')).unwrap();
+    doc.back(Event::Insert((2, 1).into(), 'e')).unwrap();
+    doc.back(Event::Insert((1, 1).into(), 'i')).unwrap();
+    doc.back(Event::Insert((0, 1).into(), 'd')).unwrap();
+    assert_eq!(
+        doc.render(),
+        st!("船r舱s和蔼t教案汉代t\n句句stdt实话t拦trs截\n")
+    );
 }

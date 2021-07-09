@@ -9,6 +9,17 @@ This project uses semantic versioning.
 \~
 \-
 -->
+## [0.5.0] - 09/07/2021
+\+ Added undo and redo
+
+\+ Added insert and remove line commands to cactus
+
+\~ Changed several events to properly allow reversing of them
+
+\~ Fixed a few regex expressions for cactus syntax highlighting
+
+\- Removed feature system, all are enabled by default
+
 ## [0.4.1] - 08/07/2021
 \~ Updated documentation
 

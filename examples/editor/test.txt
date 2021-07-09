@@ -13,3 +13,4 @@ Cactus has:
  - Scrolling of larger documents
  - Undo & Redo
  - Syntax highlighting for Rust
+ - Document searching

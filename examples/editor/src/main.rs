@@ -1,12 +1,12 @@
 /*
     Editor - A demonstration of the Kaolinite
-    in 324 SLOC (without comments and blanks)
+    in 364 SLOC (without comments and blanks)
     Uses the Crossterm crate for rendering
     and the Synpotic crate for efficeint syntax highlighting
 
     This editor has unicode and scrolling support, a basic status line, a command line interface
     handles editing multiple files, saving files, filetype detection, line numbers and word jumping,
-    line wrapping, and syntax highlighting.
+    cursor wrapping, syntax highlighting, and undo & redo.
 */
 
 use crossterm::{
@@ -47,7 +47,7 @@ const FUNCTION: [&str; 3] = [
 const DIGIT: &str = r"\b(\d+.\d+|\d+)";
 const NAMESPACE: &str = r"([A-Za-z0-9_]*)::";
 const STRUCT: [&str; 3] = [
-    r"(?:trait|enum|struct|impl)\\s+([A-Z][A-Za-z0-9_]*)\\s*",
+    r"(?:trait|enum|struct|impl)\s+([A-Z][A-Za-z0-9_]*)\s*",
     r"([A-Z][A-Za-z0-9_]*)\s*\(",
     r"impl(?:<.*?>|)\\s+([A-Z][A-Za-z0-9_]*)",
 ];
@@ -270,9 +270,23 @@ impl Editor {
     fn action(&mut self, key: KEvent) -> Result<()> {
         // Function that handles keypress events
         let loc = self.doc().loc();
-        let _ = match (key.code, key.modifiers) {
+        match (key.code, key.modifiers) {
             // Quit the editor
             (KCode::Char('q'), KMod::CONTROL) => self.quit(),
+            // Saving
+            (KCode::Char('s'), KMod::CONTROL) => self.doc_mut().save().unwrap(),
+            // Undo & Redo
+            (KCode::Char('z'), KMod::CONTROL) => self.undo(),
+            (KCode::Char('y'), KMod::CONTROL) => self.redo(),
+            // Quick line insertion
+            (KCode::Char('f'), KMod::CONTROL) => self.exe(Event::InsertRow(loc.y + 1, st!(""))),
+            (KCode::Char('h'), KMod::CONTROL) => self.delete_row(loc),
+            // Switching tabs
+            (KCode::Left, KMod::SHIFT) => self.previous_tab(),
+            (KCode::Right, KMod::SHIFT) => self.next_tab(),
+            // Word jumping
+            (KCode::Left, KMod::CONTROL) => self.word_jump_left(loc),
+            (KCode::Right, KMod::CONTROL) => self.word_jump_right(loc),
             // Cursor movement
             (KCode::Up, KMod::NONE) => self.up(),
             (KCode::Down, KMod::NONE) => self.down(),
@@ -287,23 +301,50 @@ impl Editor {
             (KCode::Backspace, KMod::NONE) => self.backspace(loc),
             // Return key
             (KCode::Enter, KMod::NONE) => self.exe(Event::SplitDown(loc)),
-            // Switching tabs
-            (KCode::Left, KMod::SHIFT) => self.previous_tab(),
-            (KCode::Right, KMod::SHIFT) => self.next_tab(),
-            // Saving
-            (KCode::Char('s'), KMod::CONTROL) => self.doc_mut().save().unwrap(),
-            // Word jumping
-            (KCode::Left, KMod::CONTROL) => self.word_jump_left(loc),
-            (KCode::Right, KMod::CONTROL) => self.word_jump_right(loc),
             _ => (),
-        };
+        }
         Ok(())
     }
 
     fn exe(&mut self, event: Event) {
         // Execute an event
         self.new_row();
-        self.doc_mut().execute(event).unwrap();
+        // Depending on certain events, commit patch to undo/redo stack
+        // Then execute the event
+        match event {
+            Event::Insert(_, ' ' | '\t') => {
+                self.doc_mut().event_stack.commit();
+                self.doc_mut().execute(event).unwrap();
+            }
+            Event::SplitDown(_)
+            | Event::SpliceUp(_)
+            | Event::InsertRow(_, _)
+            | Event::RemoveRow(_, _) => {
+                self.doc_mut().execute(event).unwrap();
+                self.doc_mut().event_stack.commit();
+            }
+            _ => {
+                self.doc_mut().execute(event).unwrap();
+            }
+        }
+    }
+
+    fn undo(&mut self) {
+        // Undo the last change
+        if let Some(patch) = self.doc_mut().event_stack.undo() {
+            for event in patch.to_owned() {
+                self.doc_mut().back(event).unwrap();
+            }
+        }
+    }
+
+    fn redo(&mut self) {
+        // Redo the last change
+        if let Some(patch) = self.doc_mut().event_stack.redo() {
+            for event in patch.to_owned() {
+                self.doc_mut().forth(event).unwrap();
+            }
+        }
     }
 
     fn quit(&mut self) {
@@ -337,11 +378,20 @@ impl Editor {
         // Handle the backspace key
         self.new_row();
         // Determine if delete or splice required
-        if loc.x == 0 {
-            self.exe(Event::SpliceUp(loc));
+        if loc.x == 0 && loc.y != 0 {
+            let x = self.doc().row(loc.y - 1).unwrap().len();
+            self.exe(Event::SpliceUp(Loc { x, y: loc.y - 1 }));
         } else {
             let c = self.doc().row(loc.y).unwrap().text[loc.x - 1];
             self.exe(Event::Remove(loc, c));
+        }
+    }
+
+    fn delete_row(&mut self, loc: Loc) {
+        // Delete the current row
+        if let Ok(row) = self.doc().row(loc.y) {
+            let row = row.render_raw();
+            self.exe(Event::RemoveRow(loc.y, row));
         }
     }
 

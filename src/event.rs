@@ -8,7 +8,7 @@ use crate::utils::Loc;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Event represents all the document events that could occur
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Event {
     /// Insert a character at a position.
     /// Takes a location and a character to insert
@@ -71,5 +71,49 @@ impl From<std::io::Error> for Error {
     #[cfg(not(tarpaulin_include))]
     fn from(e: std::io::Error) -> Error {
         Error::FileError(e)
+    }
+}
+
+/// Event stack is a struct that handles events
+#[derive(Debug, Default)]
+pub struct EditStack {
+    /// Where the current smaller editing events are stored
+    pub patch: Vec<Event>,
+    /// This is where events that have been done are
+    pub done: Vec<Vec<Event>>,
+    /// This is where events that have been undone are
+    pub undone: Vec<Vec<Event>>,
+}
+
+impl EditStack {
+    /// Adds an event to the current patch
+    pub fn exe(&mut self, event: Event) {
+        self.undone.clear();
+        self.patch.push(event);
+    }
+
+    /// Commit the patch to the done stack
+    pub fn commit(&mut self) {
+        if !self.patch.is_empty() {
+            let patch = std::mem::take(&mut self.patch);
+            self.done.push(patch);
+        }
+    }
+
+    /// Returns the last performed event and moves it around
+    pub fn undo(&mut self) -> Option<&Vec<Event>> {
+        self.commit();
+        let mut done = self.done.pop()?;
+        done.reverse();
+        self.undone.push(done);
+        self.undone.last()
+    }
+
+    /// Returns the last undone event and moves it around
+    pub fn redo(&mut self) -> Option<&Vec<Event>> {
+        let mut undone = self.undone.pop()?;
+        undone.reverse();
+        self.done.push(undone);
+        self.done.last()
     }
 }

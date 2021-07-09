@@ -58,23 +58,9 @@
 //! Because this library is quite a large collection of tools, it's hard to demonstrate it
 //! here. You can find a examples directory on github
 //! with many different examples, including a barebones text editor using the
-//! [crossterm](https://docs.rs/crossterm) library, in under 300LOC, with full support for unicode.
+//! [crossterm](https://docs.rs/crossterm) library, in 400 SLOC (excluding comments and blank lines),
+//! with syntax highlighting, undo & redo, and full unicode support.
 //! You can use that as a starting point, if you wish.
-//!
-//! ## Features
-//!
-//! ### Syntax highlighting
-//! At the moment Kaolinite has a syntax highlighting feature.
-//! While this alone doesn't add syntax highlighting into the library itself,
-//! it adds certain fields to the `Row` and `Document` struct to help integrate
-//! an existing syntax highlighting library (like `synoptic`) into your editor
-//! efficiently. You can see the `editor` example in the examples directory
-//! to see how one can efficiently implement syntax highlighting with `synoptic`.
-//!
-//! You can write this into your Cargo.toml file like this:
-//! ```
-//! kaolinite = { version = "0", features = ["syntax_highlighting"] }
-//! ```
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::cast_sign_loss)]

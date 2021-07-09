@@ -1,6 +1,6 @@
 [package]
 name = "kaolinite"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2018"
 license = "MIT"
 description = "A crate to assist in the creation of TUI text editors."
@@ -9,9 +9,6 @@ readme = "README.md"
 keywords = ["unicode", "text-processing"]
 categories = ["text-processing"]
 
-[features]
-syntax_highlighting = ["synoptic"]
-
 [profile.release]
 debug = true
 
@@ -19,7 +16,7 @@ debug = true
 once_cell = "1.8.0"
 regex = "1.5.4"
 unicode-width = "0.1.8"
-synoptic = { version = "1.0.3", optional = true }
+synoptic = "1.0.3"
 
 [dev-dependencies]
 sugars = "3.0.0"

@@ -8,6 +8,7 @@
 //!
 //! See the structs section below to find out more about each struct
 
+use crate::event::EditStack;
 use crate::event::{Error, Event, Result, Status};
 use crate::row::Row;
 use crate::utils::{filetype, width_char, Loc, Size};
@@ -58,11 +59,11 @@ pub struct Document {
     /// Stores information about scrolling
     pub offset: Loc,
     /// Render cache space for optimisation purposes
-    #[cfg(feature = "syntax_highlighting")]
     pub render: String,
     /// Toggle that determines if the document requires rerendering
-    #[cfg(feature = "syntax_highlighting")]
     pub needs_rerender: bool,
+    /// An undo / redo stack
+    pub event_stack: EditStack,
 }
 
 impl Document {
@@ -84,10 +85,9 @@ impl Document {
             offset: Loc::default(),
             size: size.into(),
             char_ptr: 0,
-            #[cfg(feature = "syntax_highlighting")]
             render: st!(""),
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
+            event_stack: EditStack::default(),
         }
     }
 
@@ -150,20 +150,30 @@ impl Document {
     /// This method is the main method that should be used to modify the document.
     /// It takes in an [Event](crate::event::Event) enum.
     ///
-    /// This method also takes advantage of undo & redo functionality and
-    /// the document modificatior indicator and moves your cursor automatically.
+    /// This method also takes advantage of undo & redo functionality, efficient syntax
+    /// highlighting and the document modificatior indicator and moves your cursor automatically.
     /// If you change the rows in the document directly, you will not gain access
     /// to these benefits, but you can always manually handle these features if need be.
     /// # Errors
     /// Will return `Err` if the event tried to modifiy data outside the scope of the
     /// document.
     pub fn execute(&mut self, event: Event) -> Result<Status> {
+        let r = self.forth(event.clone());
+        self.event_stack.exe(event);
+        r
+    }
+
+    /// Execute an event, without the undo / redo tracking
+    /// # Errors
+    /// Will error if the location is out of range
+    pub fn forth(&mut self, event: Event) -> Result<Status> {
         let tab_width = self.info.tab_width;
         match event {
             Event::Insert(loc, ch) => {
                 self.goto(loc)?;
                 self.row_mut(loc.y)?.insert(loc.x, ch, tab_width)?;
                 self.modified = true;
+                self.needs_rerender = true;
                 self.move_right()
             }
             Event::Remove(mut loc, _) => {
@@ -174,39 +184,96 @@ impl Document {
                 self.goto(loc)?;
                 self.row_mut(loc.y)?.remove(loc.x..=loc.x)?;
                 self.modified = true;
+                self.needs_rerender = true;
                 Ok(Status::None)
             }
             Event::InsertRow(loc, st) => {
                 self.rows.insert(loc, Row::new(st, self.info.tab_width));
                 self.modified = true;
+                self.needs_rerender = true;
                 self.goto_y(loc)?;
                 Ok(Status::None)
             }
             Event::RemoveRow(loc, _) => {
-                self.goto_y(loc - if loc == 0 { 0 } else { 1 })?;
+                self.goto_y(loc)?;
                 self.rows.remove(loc);
                 self.modified = true;
+                self.needs_rerender = true;
                 Ok(Status::None)
             }
             Event::SpliceUp(loc) => {
-                if loc.y == 0 {
-                    return Ok(Status::StartOfDocument);
-                }
-                let mut upper = self.row(loc.y - 1)?.clone();
-                let x = upper.len();
-                let lower = self.row(loc.y)?.clone();
-                self.rows[loc.y - 1] = upper.splice(lower);
+                let mut upper = self.row(loc.y)?.clone();
+                let lower = self.row(loc.y + 1)?.clone();
+                self.rows[loc.y] = upper.splice(lower);
                 self.modified = true;
-                self.rows.remove(loc.y);
-                self.goto((x, loc.y - 1))?;
+                self.needs_rerender = true;
+                self.rows.remove(loc.y + 1);
+                self.goto(loc)?;
                 Ok(Status::None)
             }
             Event::SplitDown(loc) => {
                 let (left, right) = self.row(loc.y)?.split(loc.x)?;
                 self.rows[loc.y] = left;
                 self.modified = true;
+                self.needs_rerender = true;
                 self.rows.insert(loc.y + 1, right);
                 self.goto((0, loc.y + 1))?;
+                Ok(Status::None)
+            }
+        }
+    }
+
+    /// Take in an event and perform the opposite
+    /// # Errors
+    /// Will error if the location is out of range
+    pub fn back(&mut self, event: Event) -> Result<Status> {
+        let tab_width = self.info.tab_width;
+        match event {
+            Event::Insert(loc, _) => {
+                self.goto(loc)?;
+                let r = self.row_mut(loc.y)?.remove(loc.x..=loc.x);
+                self.modified = true;
+                self.needs_rerender = true;
+                r
+            }
+            Event::Remove(loc, ch) => {
+                let r = self.row_mut(loc.y)?.insert(loc.x - 1, ch, tab_width);
+                self.modified = true;
+                self.needs_rerender = true;
+                self.goto(loc)?;
+                r
+            }
+            Event::InsertRow(loc, _) => {
+                self.rows.remove(loc);
+                self.goto_y(loc - 1)?;
+                self.modified = true;
+                self.needs_rerender = true;
+                Ok(Status::None)
+            }
+            Event::RemoveRow(loc, st) => {
+                self.goto_y(loc)?;
+                self.rows.insert(loc, Row::new(st, tab_width));
+                self.modified = true;
+                self.needs_rerender = true;
+                Ok(Status::None)
+            }
+            Event::SpliceUp(loc) => {
+                let (left, right) = self.row(loc.y)?.split(loc.x)?;
+                self.rows[loc.y] = left;
+                self.modified = true;
+                self.needs_rerender = true;
+                self.rows.insert(loc.y + 1, right);
+                self.goto((0, loc.y + 1))?;
+                Ok(Status::None)
+            }
+            Event::SplitDown(loc) => {
+                let mut upper = self.row(loc.y)?.clone();
+                let lower = self.row(loc.y + 1)?.clone();
+                self.rows[loc.y] = upper.splice(lower);
+                self.modified = true;
+                self.needs_rerender = true;
+                self.rows.remove(loc.y + 1);
+                self.goto(loc)?;
                 Ok(Status::None)
             }
         }

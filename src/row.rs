@@ -7,7 +7,6 @@
 use crate::event::{Error, Result, Status};
 use crate::st;
 use crate::utils::{raw_indices, width, width_char, BoundedRange};
-#[cfg(feature = "syntax_highlighting")]
 use synoptic::Token;
 
 /// A struct that contains all the basic tools necessary to manage rows in a document
@@ -31,9 +30,7 @@ pub struct Row {
     /// This is ideal for optimisation
     pub modified: bool,
     /// Tokens for this row
-    #[cfg(feature = "syntax_highlighting")]
     pub tokens: Vec<Token>,
-    #[cfg(feature = "syntax_highlighting")]
     pub needs_rerender: bool,
 }
 
@@ -47,9 +44,7 @@ impl Row {
             indices: Row::raw_to_indices(&text, tab_width),
             text,
             modified: false,
-            #[cfg(feature = "syntax_highlighting")]
             tokens: vec![],
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
         }
     }
@@ -70,10 +65,7 @@ impl Row {
         self.text.splice(start..start, text.chars());
         self.indices = Row::raw_to_indices(&self.text, tabs);
         self.modified = true;
-        #[cfg(feature = "syntax_highlighting")]
-        {
-            self.needs_rerender = true;
-        }
+        self.needs_rerender = true;
         Ok(Status::None)
     }
 
@@ -99,10 +91,7 @@ impl Row {
             .skip(start)
             .for_each(|i| *i -= shift);
         self.modified = true;
-        #[cfg(feature = "syntax_highlighting")]
-        {
-            self.needs_rerender = true;
-        }
+        self.needs_rerender = true;
         Ok(Status::None)
     }
 
@@ -114,18 +103,14 @@ impl Row {
             text: self.text.get(..idx).ok_or(Error::OutOfRange)?.to_vec(),
             indices: self.indices.get(..=idx).ok_or(Error::OutOfRange)?.to_vec(),
             modified: true,
-            #[cfg(feature = "syntax_highlighting")]
             tokens: vec![],
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
         };
         let mut right = Row {
             text: self.text.get(idx..).ok_or(Error::OutOfRange)?.to_vec(),
             indices: self.indices.get(idx..).ok_or(Error::OutOfRange)?.to_vec(),
             modified: false,
-            #[cfg(feature = "syntax_highlighting")]
             tokens: vec![],
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
         };
         // Shift down
@@ -147,9 +132,7 @@ impl Row {
             indices,
             text,
             modified: true,
-            #[cfg(feature = "syntax_highlighting")]
             tokens: vec![],
-            #[cfg(feature = "syntax_highlighting")]
             needs_rerender: true,
         }
     }
