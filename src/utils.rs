@@ -84,7 +84,7 @@ pub fn get_range<R>(range: &R, min: usize, max: usize) -> (usize, usize) where R
 #[must_use]
 pub fn width(st: &str, tab_width: usize) -> usize {
     let tabs = st.matches('\t').count();
-    st.width() + tabs * tab_width
+    (st.width() + tabs * tab_width).saturating_sub(tabs)
 }
 
 /// Determine the filetype from the extension

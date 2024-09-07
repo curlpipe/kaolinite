@@ -19,7 +19,7 @@ lto = true
 quick-error = "2.0.1"
 regex = "1.6.0"
 ropey = "1.5.0"
-unicode-width = "0.1.9"
+unicode-width = "0.1.13"
 
 [dev-dependencies]
 rand = "0.8.5"
