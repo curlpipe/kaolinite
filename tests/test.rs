@@ -216,6 +216,7 @@ fn document_moving() {
     assert_eq!(doc2.offset.x, 0);
     assert_eq!(doc2.offset.y, 0);
     doc2.goto(&Loc { x: 6, y: 0 });
+    doc2.old_cursor = 5;
     doc2.move_down();
     assert_eq!(doc2.loc(), Loc { x: 5, y: 1 });
     assert_eq!(doc2.char_loc(), Loc { x: 5, y: 1 });
@@ -225,10 +226,12 @@ fn document_moving() {
     doc2.offset.x = 6;
     doc2.cursor.x = 0;
     doc2.char_ptr = 6;
+    doc2.old_cursor = 5;
     doc2.move_down();
     assert_eq!(doc2.loc(), Loc { x: 5, y: 1 });
     assert_eq!(doc2.char_loc(), Loc { x: 5, y: 1 });
     assert_eq!(doc2.offset.x, 5);
+    doc2.old_cursor = 0;
     doc2.move_down();
     doc2.move_down();
     doc2.move_end();
@@ -316,11 +319,13 @@ fn document_tab() {
     assert_eq!(doc1.char_ptr, 2);
     // Check tab cursor split
     doc1.goto(&Loc::at(1, 0));
+    doc1.old_cursor = 6;
     doc1.move_down();
     doc1.move_left();
     doc1.move_left();
     assert_eq!(doc1.loc(), Loc::at(4, 1));
     assert_eq!(doc1.char_ptr, 4);
+    doc1.old_cursor = 0;
     doc1.move_up();
     assert_eq!(doc1.loc(), Loc::at(0, 0));
     assert_eq!(doc1.char_ptr, 0);
