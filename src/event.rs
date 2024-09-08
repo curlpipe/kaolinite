@@ -66,11 +66,11 @@ quick_error! {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct EventMgmt {
     /// The patch is the current sequence of editing actions
-    patch: Vec<Event>,
+    pub patch: Vec<Event>,
     /// Undo contains all the patches that have been applied
-    undo: Vec<Vec<Event>>,
+    pub undo: Vec<Vec<Event>>,
     /// Redo contains all the patches that have been undone
-    redo: Vec<Vec<Event>>,
+    pub redo: Vec<Vec<Event>>,
 }
 
 impl EventMgmt {
