@@ -43,6 +43,8 @@ pub struct Document {
     pub tab_width: usize,
     /// Whether or not the document can be edited
     pub read_only: bool,
+    /// Storage of the old cursor x position (to snap back to)
+    pub old_cursor: usize,
 }
 
 impl Document {
@@ -64,6 +66,7 @@ impl Document {
             modified: false,
             tab_width: 4,
             read_only: false,
+            old_cursor: 0,
         }
     }
 
@@ -90,6 +93,7 @@ impl Document {
             modified: false,
             tab_width: 4,
             read_only: false,
+            old_cursor: 0,
         })
     }
 
@@ -208,6 +212,7 @@ impl Document {
         self.tab_map.splice(loc, tab_start, tabs);
         // Go to end x position
         self.goto_x(loc.x + st.chars().count());
+        self.old_cursor = self.char_ptr;
         Ok(())
     }
 
@@ -251,6 +256,7 @@ impl Document {
         // Update cache
         let line: String = self.file.line(y).chars().collect();
         self.lines[y] = line.trim_end_matches(&['\n', '\r']).to_string();
+        self.old_cursor = self.char_ptr;
         Ok(())
     }
 
@@ -279,6 +285,7 @@ impl Document {
         self.loaded_to += 1;
         // Goto line
         self.goto_y(loc);
+        self.old_cursor = self.char_ptr;
         Ok(())
     }
 
@@ -303,6 +310,7 @@ impl Document {
         self.loaded_to = self.loaded_to.saturating_sub(1);
         // Goto line
         self.goto_y(loc);
+        self.old_cursor = self.char_ptr;
         Ok(())
     }
 
@@ -319,6 +327,7 @@ impl Document {
         self.delete(loc.x.., loc.y)?;
         self.insert_line(loc.y + 1, rhs)?;
         self.goto(&Loc::at(0, loc.y + 1));
+        self.old_cursor = self.char_ptr;
         Ok(())
     }
 
@@ -335,6 +344,7 @@ impl Document {
         self.delete_line(y + 1)?;
         self.insert(&Loc::at(length, y), &below)?;
         self.goto(&Loc::at(length, y));
+        self.old_cursor = self.char_ptr;
         Ok(())
     }
 
@@ -356,6 +366,7 @@ impl Document {
         self.fix_split();
         // Update the character pointer
         self.update_char_ptr();
+        self.goto_x(self.old_cursor);
         Status::None
     }
 
@@ -379,6 +390,8 @@ impl Document {
         self.fix_split();
         // Update the character pointer
         self.update_char_ptr();
+        self.goto_x(self.old_cursor);
+        //panic!("{}", self.old_cursor);
         Status::None
     }
 
@@ -410,6 +423,7 @@ impl Document {
         }
         // Update the character pointer
         self.char_ptr -= 1;
+        self.old_cursor = self.char_ptr;
         Status::None
     }
 
@@ -442,6 +456,7 @@ impl Document {
         }
         // Update the character pointer
         self.char_ptr += 1;
+        self.old_cursor = self.char_ptr;
         Status::None
     }
 
@@ -450,6 +465,7 @@ impl Document {
         self.cursor.x = 0;
         self.offset.x = 0;
         self.char_ptr = 0;
+        self.old_cursor = 0;
     }
 
     /// Move to the end of the line
@@ -457,17 +473,20 @@ impl Document {
         let line = self.line(self.loc().y).unwrap_or_else(|| "".to_string());
         let length = line.chars().count();
         self.goto_x(length);
+        self.old_cursor = self.char_ptr;
     }
 
     /// Move to the top of the document
     pub fn move_top(&mut self) {
         self.goto(&Loc::at(0, 0));
+        self.old_cursor = self.char_ptr;
     }
 
     /// Move to the bottom of the document
     pub fn move_bottom(&mut self) {
         let last = self.len_lines();
         self.goto(&Loc::at(0, last));
+        self.old_cursor = self.char_ptr;
     }
 
     /// Move up by 1 page
@@ -479,6 +498,7 @@ impl Document {
         self.char_ptr = 0;
         self.cursor.x = 0;
         self.offset.x = 0;
+        self.old_cursor = 0;
         // Shift the offset up by 1 page
         self.offset.y = self.offset.y.saturating_sub(self.size.h + y);
     }
@@ -492,6 +512,7 @@ impl Document {
         self.char_ptr = 0;
         self.cursor.x = 0;
         self.offset.x = 0;
+        self.old_cursor = 0;
         // Shift the offset down by 1 page
         let by = self.size.h.saturating_sub(y);
         let len = self.len_lines();
@@ -522,6 +543,7 @@ impl Document {
                 return self.move_prev_word();
             }
         }
+        self.old_cursor = self.char_ptr;
         Status::None
     }
 
@@ -537,6 +559,7 @@ impl Document {
             mtch.loc.x += mtch.text.chars().count();
             self.goto(&mtch.loc);
         }
+        self.old_cursor = self.char_ptr;
         Status::None
     }
 
@@ -627,7 +650,9 @@ impl Document {
         }
         // If the move position is out of bounds, move to the end of the line
         if line.chars().count() < x {
-            self.move_end();
+            let line = self.line(self.loc().y).unwrap_or_else(|| "".to_string());
+            let length = line.chars().count();
+            self.goto_x(length);
             return;
         }
         // Update char position
