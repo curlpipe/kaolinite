@@ -45,6 +45,8 @@ pub struct Document {
     pub read_only: bool,
     /// Storage of the old cursor x position (to snap back to)
     pub old_cursor: usize,
+    /// Flag for if the editor is currently in a redo action
+    pub in_redo: bool,
 }
 
 impl Document {
@@ -67,6 +69,7 @@ impl Document {
             tab_width: 4,
             read_only: false,
             old_cursor: 0,
+            in_redo: false,
         }
     }
 
@@ -94,6 +97,7 @@ impl Document {
             tab_width: 4,
             read_only: false,
             old_cursor: 0,
+            in_redo: false,
         })
     }
 
@@ -160,10 +164,12 @@ impl Document {
     /// # Errors
     /// Will return an error if any of the events failed to be re-executed.
     pub fn redo(&mut self) -> Result<()> {
+        self.in_redo = true;
         for ev in self.event_mgmt.redo().unwrap_or_default() {
             self.forth(ev)?;
         }
         self.modified = true;
+        self.in_redo = false;
         Ok(())
     }
 
@@ -223,8 +229,15 @@ impl Document {
             &self.line(loc.y).unwrap_or_else(|| "".to_string()), 
             self.tab_width
         );
-        if boundaries.contains(&loc.x.saturating_add(1)) {
-            self.delete(loc.x.saturating_sub(self.tab_width.saturating_sub(1))..=loc.x + st.chars().count(), loc.y)
+        if boundaries.contains(&loc.x.saturating_add(1)) && !self.in_redo {
+            // Register other delete actions to delete the whole tab
+            let mut loc_copy = loc.clone();
+            self.delete(loc.x..=loc.x + st.chars().count(), loc.y)?;
+            for _ in 1..self.tab_width {
+                loc_copy.x -= 1;
+                self.exe(Event::Delete(loc_copy, " ".to_string()))?;
+            }
+            Ok(())
         } else {
             // Normal character delete
             self.delete(loc.x..=loc.x + st.chars().count(), loc.y)

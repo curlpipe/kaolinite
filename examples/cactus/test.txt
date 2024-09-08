@@ -1,3 +1,1 @@
-Really really really long line
-Shorter line
-Another really long one
+    line
