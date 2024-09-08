@@ -169,7 +169,7 @@ impl Document {
     pub fn forth(&mut self, ev: Event) -> Result<()> {
         match ev {
             Event::Insert(loc, ch) => self.insert(&loc, &ch),
-            Event::Delete(loc, st) => self.delete(loc.x..=loc.x + st.chars().count(), loc.y),
+            Event::Delete(loc, st) => self.delete_with_tab(&loc, &st),
             Event::InsertLine(loc, st) => self.insert_line(loc, st),
             Event::DeleteLine(loc, _) => self.delete_line(loc),
             Event::SplitDown(loc) => self.split_down(&loc),
@@ -209,6 +209,21 @@ impl Document {
         // Go to end x position
         self.goto_x(loc.x + st.chars().count());
         Ok(())
+    }
+
+    /// Deletes a character at a location whilst checking for tab spaces
+    pub fn delete_with_tab(&mut self, loc: &Loc, st: &str) -> Result<()> {
+        // Check for tab spaces
+        let boundaries = tab_boundaries_backward(
+            &self.line(loc.y).unwrap_or_else(|| "".to_string()), 
+            self.tab_width
+        );
+        if boundaries.contains(&loc.x.saturating_add(1)) {
+            self.delete(loc.x.saturating_sub(self.tab_width.saturating_sub(1))..=loc.x + st.chars().count(), loc.y)
+        } else {
+            // Normal character delete
+            self.delete(loc.x..=loc.x + st.chars().count(), loc.y)
+        }
     }
 
     /// Deletes a range from this document.
