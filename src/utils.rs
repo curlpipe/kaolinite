@@ -87,6 +87,44 @@ pub fn width(st: &str, tab_width: usize) -> usize {
     (st.width() + tabs * tab_width).saturating_sub(tabs)
 }
 
+/// Utility function to take a line and determine where spaces should be treated as tabs (forwards)
+#[must_use]
+pub fn tab_boundaries_forward(line: &str, tab_width: usize) -> Vec<usize> {
+    let mut at = 0;
+    let mut boundaries = vec![];
+    while at < width(line, tab_width) {
+        let tab_test = line.chars().skip(at).take(tab_width).collect::<String>();
+        if tab_test == " ".repeat(tab_width) {
+            // Should be treated as a tab
+            boundaries.push(at);
+            at += tab_width;
+        } else {
+            // Non-spaces here, don't treat as a tab
+            break;
+        }
+    }
+    boundaries
+}
+
+/// Utility function to take a line and determine where spaces should be treated as tabs (backwards)
+#[must_use]
+pub fn tab_boundaries_backward(line: &str, tab_width: usize) -> Vec<usize> {
+    let mut at = 0;
+    let mut boundaries = vec![];
+    while at < width(line, tab_width) {
+        let tab_test = line.chars().skip(at).take(tab_width).collect::<String>();
+        if tab_test == " ".repeat(tab_width) {
+            // Should be treated as a tab
+            boundaries.push(at + tab_width);
+            at += tab_width;
+        } else {
+            // Non-spaces here, don't treat as a tab
+            break;
+        }
+    }
+    boundaries
+}
+
 /// Determine the filetype from the extension
 #[allow(clippy::too_many_lines)]
 #[must_use]

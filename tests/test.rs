@@ -188,15 +188,15 @@ fn document_moving() {
     for _ in 0..14 {
         doc2.move_right();
     }
-    assert_eq!(doc2.loc(), Loc { x: 16, y: 0 });
-    assert_eq!(doc2.char_loc(), Loc { x: 14, y: 0 });
-    assert_eq!(doc2.offset.x, 7);
+    assert_eq!(doc2.loc(), Loc { x: 20, y: 0 });
+    assert_eq!(doc2.char_loc(), Loc { x: 17, y: 0 });
+    assert_eq!(doc2.offset.x, 11);
     for _ in 0..5 {
         doc2.move_left();
     }
-    assert_eq!(doc2.loc(), Loc { x: 10, y: 0 });
-    assert_eq!(doc2.char_loc(), Loc { x: 9, y: 0 });
-    assert_eq!(doc2.offset.x, 7);
+    assert_eq!(doc2.loc(), Loc { x: 14, y: 0 });
+    assert_eq!(doc2.char_loc(), Loc { x: 12, y: 0 });
+    assert_eq!(doc2.offset.x, 11);
     doc2.move_home();
     assert_eq!(doc2.loc(), Loc { x: 0, y: 0 });
     assert_eq!(doc2.char_loc(), Loc { x: 0, y: 0 });
