@@ -27,6 +27,19 @@ impl Event {
             Event::SpliceUp(loc) => Event::SplitDown(loc),
         }
     }
+
+    /// Get the location of an event
+    #[must_use]
+    pub fn loc(self) -> Loc {
+        match self {
+            Event::Insert(loc, _) => loc,
+            Event::Delete(loc, _) => loc,
+            Event::InsertLine(loc, _) => Loc { x: 0, y: loc },
+            Event::DeleteLine(loc, _) => Loc { x: 0, y: loc },
+            Event::SplitDown(loc) => loc,
+            Event::SpliceUp(loc) => loc,
+        }
+    }
 }
 
 /// Represents various statuses of functions
