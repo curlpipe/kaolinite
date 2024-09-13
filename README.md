@@ -1,3 +1,5 @@
+> :warning: ⚠️ ⚠️ Please note: This repository itself is no longer updated as it has been merged with the repository <a href="https://github.com/curlpipe/ox">for the Ox Editor</a>. The cargo crate will remain updated, it is only this repository itself that will be archived. Kaolinite and Ox are still very much active projects.
+
 <h1 align="center">
   <br>
   <a href="https://github.com/curlpipe/kaolinite"><img src="https://i.postimg.cc/253c9YVX/image.png" alt="Markdownify" width="200"></a>
